@@ -94,10 +94,15 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
 
   // Initialize ML5 Models
   useEffect(() => {
-    let isMounted = true;
-
     const initModels = async () => {
-      if (loadingLockRef.current) return;
+      // Skip if already loading or loaded
+      if (loadingLockRef.current) {
+        // If models are already loaded in refs, sync state
+        if (faceMeshRef.current && handPoseRef.current) {
+          setModelsLoaded({ face: true, hand: true });
+        }
+        return;
+      }
       
       let attempts = 0;
       while (!window.ml5 && attempts < 20) {
@@ -106,7 +111,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
       }
 
       if (!window.ml5) {
-        if (isMounted) setError("ML5 library failed to load.");
+        setError("ML5 library failed to load.");
         return;
       }
       
@@ -117,38 +122,27 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
           const faceOptions = {
             maxFaces: 1,
             refineLandmarks: true,
-            flipHorizontal: false
+            flipped: false
           };
-          const faceModel = await window.ml5.faceMesh(faceOptions);
-          if (isMounted) {
-             faceMeshRef.current = faceModel;
-             setModelsLoaded(prev => ({ ...prev, face: true }));
-          }
+          faceMeshRef.current = await window.ml5.faceMesh(faceOptions);
         }
+        setModelsLoaded(prev => ({ ...prev, face: true }));
 
         if (!handPoseRef.current) {
           const handOptions = {
             maxHands: 2,
-            flipHorizontal: false
+            flipped: false
           };
-          const handModel = await window.ml5.handPose(handOptions);
-           if (isMounted) {
-             handPoseRef.current = handModel;
-             setModelsLoaded(prev => ({ ...prev, hand: true }));
-          }
+          handPoseRef.current = await window.ml5.handPose(handOptions);
         }
-        
+        setModelsLoaded(prev => ({ ...prev, hand: true }));
       } catch (e) {
         console.error("Failed to initialize models:", e);
-        if (isMounted) setError("Failed to load AI models.");
+        setError("Failed to load AI models.");
       }
     };
 
     initModels();
-    
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   // Stable Render Loop (does not depend on props)
@@ -249,7 +243,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
 
   // Handle Detection Logic
   useEffect(() => {
-    let detectionInterval: ReturnType<typeof setInterval> | null = null;
+    let detectionInterval: number | null = null;
     let detectionStartTimeout: ReturnType<typeof setTimeout> | null = null;
     
     // Start the render loop immediately
@@ -311,7 +305,6 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
 
             if (!isDetectingRef.current) {
               isDetectingRef.current = true;
-              console.log(`Starting ${activeMode} detection...`);
               
               try {
                 // ml5 detectStart runs a continuous loop internally

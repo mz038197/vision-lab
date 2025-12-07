@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { ML5NeuralNetwork, HandPosePrediction } from '../types';
-import { getNormalizedHandVector } from '../utils/handUtils';
+import { flattenHandData } from '../utils/handUtils';
 
 interface GestureTrainerProps {
   handPoseDataRef: React.MutableRefObject<HandPosePrediction[]>;
@@ -14,6 +14,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   const [trainingLogs, setTrainingLogs] = useState<{ epoch: number; loss: number }[]>([]);
   const [isTraining, setIsTraining] = useState(false);
   const [isTrained, setIsTrained] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [classificationResult, setClassificationResult] = useState<string>('');
   const [confidence, setConfidence] = useState<number>(0);
   
@@ -24,6 +25,9 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
   // Stats tracking
   const [dataCounts, setDataCounts] = useState<Record<string, number>>({});
+  
+  // File input ref for loading model
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const initNetwork = () => {
@@ -51,19 +55,23 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
       // Ensure we have a trained network and hand data
       if (isTrained && network && currentData.length > 0) {
-        const input = getNormalizedHandVector(currentData[0]);
+        const input = flattenHandData(currentData[0]);
         if (input.length === 42) {
           try {
             // NOTE: We wait for the callback BEFORE scheduling the next classification.
             // This prevents "stacking" inference calls which crashes the browser.
-            network.classify(input, (error: any, results: any[]) => {
+            network.classify(input, (results: any) => {
               if (isCancelled) return;
 
-              if (error) {
-                console.error(error);
-              } else if (results && results.length > 0) {
-                setClassificationResult(results[0].label);
-                setConfidence(results[0].confidence);
+              // ml5 v1: callback receives results directly (not error, results)
+              if (results && Array.isArray(results) && results.length > 0) {
+                // Format: [{ label: 'One', confidence: 0.99 }, ...]
+                const topResult = results[0];
+                const label = topResult.label ?? '';
+                const confidence = topResult.confidence ?? 0;
+                
+                setClassificationResult(label);
+                setConfidence(confidence);
               }
               
               // Schedule next inference only after this one is done
@@ -101,7 +109,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   const collectData = (label: string) => {
     if (!network || handPoseDataRef.current.length === 0) return;
 
-    const inputs = getNormalizedHandVector(handPoseDataRef.current[0]);
+    const inputs = flattenHandData(handPoseDataRef.current[0]);
     if (inputs.length === 42) {
       const target = { label };
       network.addData(inputs, target);
@@ -113,37 +121,57 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     }
   };
 
-  const trainModel = () => {
+  const trainModel = async () => {
     if (!network) return;
+    
+    // Check if we have enough data
+    const totalSamples = Object.values(dataCounts).reduce((a, b) => (a as number) + (b as number), 0) as number;
+    if (totalSamples < 2) {
+      alert("Please collect at least 2 data samples before training.");
+      return;
+    }
     
     setIsTraining(true);
     setTrainingLogs([]);
     setIsTrained(false);
 
-    network.normalizeData();
+    // Use setTimeout to allow UI to update before heavy computation
+    setTimeout(() => {
+      try {
+        network.normalizeData();
 
-    const trainingOptions = {
-      epochs,
-      batchSize,
-      learningRate
-    };
+        const trainingOptions = {
+          epochs,
+          batchSize,
+          learningRate
+        };
 
-    network.train(
-      trainingOptions,
-      (epoch, loss) => {
-        // While training
-        setTrainingLogs(prev => {
-            // Optimization: Only keep last 100 logs
-            return [{ epoch, loss }, ...prev].slice(0, 100);
-        });
-      },
-      () => {
-        // Finished training
+        network.train(
+          trainingOptions,
+          (epoch: number, logs: { loss?: number; acc?: number }) => {
+            try {
+              // ml5 v1 format: (epoch, { acc, loss, val_acc, val_loss })
+              const loss = logs?.loss ?? 0;
+              
+              setTrainingLogs(prev => {
+                  return [{ epoch, loss }, ...prev].slice(0, 100);
+              });
+            } catch (e) {
+              console.warn("Error in training callback:", e);
+            }
+          },
+          () => {
+            // Finished training
+            setIsTraining(false);
+            setIsTrained(true);
+          }
+        );
+      } catch (error) {
+        console.error("Training error:", error);
         setIsTraining(false);
-        setIsTrained(true);
-        console.log('Model trained!');
+        alert("Training failed. Please collect more varied data samples and try again.");
       }
-    );
+    }, 100);
   };
 
   const saveModel = () => {
@@ -153,6 +181,69 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
          network.save(name);
       }
     }
+  };
+
+  const handleLoadModel = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // ml5 neuralNetwork expects: model.json, model_meta.json, model.weights.bin
+    const fileArray: File[] = Array.from(files);
+    
+    // Check if we have the required files
+    const jsonFile = fileArray.find(f => f.name.endsWith('model.json') && !f.name.includes('meta'));
+    const metaFile = fileArray.find(f => f.name.includes('model_meta.json'));
+    const weightsFile = fileArray.find(f => f.name.endsWith('.weights.bin'));
+
+    if (!jsonFile || !metaFile || !weightsFile) {
+      alert("Please select all 3 model files: model.json, model_meta.json, and model.weights.bin");
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Create a new neural network for loading
+      const nn = window.ml5.neuralNetwork({
+        task: 'classification',
+        debug: false,
+      });
+
+      // Create object URLs for the files
+      const modelInfo = {
+        model: URL.createObjectURL(jsonFile as Blob),
+        metadata: URL.createObjectURL(metaFile as Blob),
+        weights: URL.createObjectURL(weightsFile as Blob),
+      };
+
+      // Load the model
+      nn.load(modelInfo, () => {
+        setNetwork(nn);
+        setIsTrained(true);
+        setIsLoading(false);
+        setLabels([]); // Clear labels since we don't know them from loaded model
+        setDataCounts({});
+        setTrainingLogs([]);
+        
+        // Revoke object URLs to free memory
+        URL.revokeObjectURL(modelInfo.model);
+        URL.revokeObjectURL(modelInfo.metadata);
+        URL.revokeObjectURL(modelInfo.weights);
+        
+        alert("Model loaded successfully! You can now make predictions.");
+      });
+    } catch (error) {
+      console.error("Error loading model:", error);
+      setIsLoading(false);
+      alert("Failed to load model. Please check the files and try again.");
+    }
+
+    // Reset file input
+    e.target.value = '';
   };
 
   return (
@@ -225,7 +316,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
         <div className="flex flex-col gap-2 mt-auto">
              <button
                onClick={trainModel}
-               disabled={labels.length < 2 || isTraining || Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) === 0}
+               disabled={labels.length < 2 || isTraining || isLoading || Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) === 0}
                className={`w-full py-3 rounded-lg font-bold text-white shadow-lg transition-all ${
                  isTraining ? 'bg-gray-600 cursor-wait' : 
                  labels.length < 2 ? 'bg-gray-700 opacity-50 cursor-not-allowed' :
@@ -243,6 +334,30 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
                  Save Model
                </button>
              )}
+
+             <div className="border-t border-gray-600 pt-2 mt-2">
+               <input
+                 ref={fileInputRef}
+                 type="file"
+                 multiple
+                 accept=".json,.bin"
+                 onChange={onFileSelected}
+                 className="hidden"
+               />
+               <button
+                 onClick={handleLoadModel}
+                 disabled={isTraining || isLoading}
+                 className={`w-full py-2 rounded-lg font-medium text-white transition-colors flex items-center justify-center gap-2 ${
+                   isLoading ? 'bg-gray-600 cursor-wait' : 'bg-blue-600 hover:bg-blue-500'
+                 }`}
+               >
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                 </svg>
+                 {isLoading ? 'Loading...' : 'Load Model'}
+               </button>
+               <p className="text-xs text-gray-500 mt-1 text-center">Select all 3 files: .json, _meta.json, .weights.bin</p>
+             </div>
         </div>
       </div>
 

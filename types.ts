@@ -57,10 +57,10 @@ export interface ML5NeuralNetwork {
   normalizeData: () => void;
   train: (
     options: TrainingOptions, 
-    whileTraining: (epoch: number, loss: number) => void, 
+    whileTraining: (epochOrLogs: any, loss?: number) => void, 
     finishedTraining: () => void
   ) => void;
-  classify: (inputs: number[] | any, callback: (error: any, results: any[]) => void) => void;
+  classify: (inputs: number[] | any, callback: (results: any[]) => void) => void;
   save: (name?: string) => void;
   load: (filesOrPath: any, callback?: () => void) => void;
 }
