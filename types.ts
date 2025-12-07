@@ -68,6 +68,7 @@ export interface ML5NeuralNetwork {
 declare global {
   interface Window {
     ml5: {
+      setBackend: (backend: string) => Promise<boolean>;
       faceMesh: (options?: any) => Promise<ML5Model>;
       handPose: (options?: any) => Promise<ML5Model>;
       neuralNetwork: (options?: NeuralNetworkOptions) => ML5NeuralNetwork;

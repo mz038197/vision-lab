@@ -113,6 +113,12 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
       loadingLockRef.current = true;
 
       try {
+        // Set backend to webgl as requested to ensure hardware acceleration and prevent context crashes
+        if (window.ml5.setBackend) {
+           await window.ml5.setBackend("webgl");
+           console.log("ml5 backend set to webgl");
+        }
+
         if (!faceMeshRef.current) {
           const faceOptions = {
             maxFaces: 1,
@@ -261,8 +267,12 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
       
       try {
         // Stop both models to be safe when switching or unmounting
-        if (faceMeshRef.current?.detectStop) faceMeshRef.current.detectStop();
-        if (handPoseRef.current?.detectStop) handPoseRef.current.detectStop();
+        if (faceMeshRef.current && typeof faceMeshRef.current.detectStop === 'function') {
+           faceMeshRef.current.detectStop();
+        }
+        if (handPoseRef.current && typeof handPoseRef.current.detectStop === 'function') {
+           handPoseRef.current.detectStop();
+        }
       } catch (e) {
           console.warn("Error stopping models", e);
       }
@@ -286,12 +296,10 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
       if (!isActive || !stream) return;
 
       // 2. Debounce start: Wait 300ms before starting new detection.
-      // This prevents rapid switching from crashing the browser and gives DOM time to settle.
       detectionStartTimeout = setTimeout(() => {
         const video = videoRef.current;
         
         // 3. Poll for readiness (Video + Model)
-        // We poll instead of depending on 'modelsLoaded' state to avoid useEffect re-triggering loop
         detectionInterval = window.setInterval(() => {
           if (!video || video.paused || video.ended) return;
           
@@ -351,7 +359,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, onCapture, onHand
       stopDetection();
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isActive, activeMode, stream, renderLoop]); // Removed 'modelsLoaded' to prevent restart loops
+  }, [isActive, activeMode, stream, renderLoop]); 
 
   const captureImage = useCallback(() => {
     if (videoRef.current) {
