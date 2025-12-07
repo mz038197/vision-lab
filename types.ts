@@ -30,6 +30,26 @@ export interface HandPosePrediction {
   handedness: "Left" | "Right";
 }
 
+export interface BodyPoseKeypoint {
+  x: number;
+  y: number;
+  confidence: number;
+  name?: string;
+}
+
+export interface BodyPosePrediction {
+  keypoints: BodyPoseKeypoint[];
+  score?: number;
+  box?: {
+    width: number;
+    height: number;
+    xMax: number;
+    xMin: number;
+    yMax: number;
+    yMin: number;
+  };
+}
+
 export interface ML5Model {
   detectStart: (
     media: HTMLVideoElement, 
@@ -70,6 +90,7 @@ declare global {
     ml5: {
       faceMesh: (options?: any) => Promise<ML5Model>;
       handPose: (options?: any) => Promise<ML5Model>;
+      bodyPose: (model?: 'MoveNet' | 'BlazePose', options?: any) => Promise<ML5Model>;
       neuralNetwork: (options?: NeuralNetworkOptions) => ML5NeuralNetwork;
       setBackend: (backend: 'webgl' | 'cpu' | 'webgpu') => Promise<void>;
     };

@@ -7,7 +7,8 @@ import { HandPosePrediction } from './types';
 
 function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [activeMode, setActiveMode] = useState<'none' | 'face' | 'hand'>('none');
+  const [activeMode, setActiveMode] = useState<'none' | 'face' | 'hand' | 'body'>('none');
+  const [bodyPoseModel, setBodyPoseModel] = useState<'MoveNet' | 'BlazePose'>('MoveNet');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   
   // Use Ref instead of State for high-frequency data to prevent re-renders (60fps)
@@ -58,7 +59,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Vision Lab</h1>
-              <p className="text-xs text-gray-400">Gemini Nano & ml5.js</p>
+              <p className="text-xs text-gray-400">Vans coding & ml5.js</p>
             </div>
           </div>
           
@@ -96,7 +97,7 @@ function App() {
 
              {/* Detection Mode Selectors */}
              <div className="bg-gray-800 rounded-full p-1 flex items-center border border-gray-700 shadow-inner">
-               {['none', 'face', 'hand'].map((mode) => (
+               {['none', 'face', 'hand', 'body'].map((mode) => (
                   <button
                     key={mode}
                     onClick={() => {
@@ -113,9 +114,36 @@ function App() {
                     {mode === 'none' && 'No Effects'}
                     {mode === 'face' && 'Face Mesh'}
                     {mode === 'hand' && 'Hand Pose'}
+                    {mode === 'body' && 'Body Pose'}
                   </button>
                ))}
              </div>
+
+             {/* BodyPose Model Selector - Only show when body mode is active */}
+             {isCameraActive && activeMode === 'body' && (
+               <div className="bg-gray-800 rounded-full p-1 flex items-center border border-gray-700 shadow-inner">
+                 <button
+                   onClick={() => setBodyPoseModel('MoveNet')}
+                   className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                     bodyPoseModel === 'MoveNet'
+                       ? 'bg-blue-600 text-white shadow-sm'
+                       : 'text-gray-400 hover:text-gray-200'
+                   }`}
+                 >
+                   MoveNet
+                 </button>
+                 <button
+                   onClick={() => setBodyPoseModel('BlazePose')}
+                   className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                     bodyPoseModel === 'BlazePose'
+                       ? 'bg-blue-600 text-white shadow-sm'
+                       : 'text-gray-400 hover:text-gray-200'
+                   }`}
+                 >
+                   BlazePose
+                 </button>
+               </div>
+             )}
           </div>
 
           {/* Main Layout: Camera + Trainer Side by Side */}
@@ -132,6 +160,7 @@ function App() {
                 <Camera 
                   isActive={isCameraActive} 
                   activeMode={activeMode}
+                  bodyPoseModel={bodyPoseModel}
                   onCapture={handleCapture}
                   onHandResults={handleHandResults}
                 />
