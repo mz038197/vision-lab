@@ -1,0 +1,7 @@
+{
+  "name": "FaceMesh & Gemini Editor",
+  "description": "Real-time FaceMesh detection with ml5.js and AI-powered image editing using Gemini 2.5 Flash Image.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
