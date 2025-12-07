@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Camera from './components/Camera';
 import Editor from './components/Editor';
 import GestureTrainer from './components/GestureTrainer';
@@ -12,6 +12,21 @@ function App() {
   
   // Use Ref instead of State for high-frequency data to prevent re-renders (60fps)
   const handPoseResultsRef = useRef<HandPosePrediction[]>([]);
+
+  // Set ml5.js backend to WebGL
+  useEffect(() => {
+    const setBackend = async () => {
+      if (window.ml5) {
+        try {
+          await window.ml5.setBackend('webgl');
+          console.log('ml5.js backend set to WebGL');
+        } catch (error) {
+          console.warn('Failed to set ml5 backend:', error);
+        }
+      }
+    };
+    setBackend();
+  }, []);
 
   const toggleCamera = () => {
     setIsCameraActive(!isCameraActive);
@@ -56,11 +71,11 @@ function App() {
       </header>
 
       {/* Main Content - Scrollable Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full scroll-smooth">
-        <div className="max-w-7xl mx-auto flex flex-col items-center justify-start min-h-full gap-6 pb-20">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 w-full scroll-smooth">
+        <div className="max-w-[1600px] mx-auto flex flex-col gap-4">
           
           {/* Control Panel */}
-          <div className="w-full max-w-3xl flex flex-wrap items-center justify-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
              {/* Camera Toggle */}
              <button
                onClick={toggleCamera}
@@ -81,7 +96,6 @@ function App() {
 
              {/* Detection Mode Selectors */}
              <div className="bg-gray-800 rounded-full p-1 flex items-center border border-gray-700 shadow-inner">
-               
                {['none', 'face', 'hand'].map((mode) => (
                   <button
                     key={mode}
@@ -104,29 +118,39 @@ function App() {
              </div>
           </div>
 
-          {/* Camera Viewport */}
-          <div className="w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group shrink-0">
-             <div className="absolute top-0 left-0 w-20 h-20 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
-             <div className="absolute top-0 right-0 w-20 h-20 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
-             <div className="absolute bottom-0 left-0 w-20 h-20 border-b-2 border-l-2 border-indigo-500/50 rounded-bl-2xl z-20 pointer-events-none"></div>
-             <div className="absolute bottom-0 right-0 w-20 h-20 border-b-2 border-r-2 border-indigo-500/50 rounded-br-2xl z-20 pointer-events-none"></div>
+          {/* Main Layout: Camera + Trainer Side by Side */}
+          <div className={`flex flex-col ${isCameraActive && activeMode === 'hand' ? 'lg:flex-row' : ''} gap-4 items-start`}>
+            
+            {/* Camera Viewport */}
+            <div className={`${isCameraActive && activeMode === 'hand' ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0`}>
+              <div className="aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
+                <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-indigo-500/50 rounded-bl-2xl z-20 pointer-events-none"></div>
+                <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-indigo-500/50 rounded-br-2xl z-20 pointer-events-none"></div>
 
-             <Camera 
-               isActive={isCameraActive} 
-               activeMode={activeMode}
-               onCapture={handleCapture}
-               onHandResults={handleHandResults}
-             />
-          </div>
-          
-          <div className="text-center max-w-2xl text-gray-500 text-sm">
-             <p>1. Start the camera. 2. Select Face Mesh or Hand Pose. 3. Capture a photo to edit with AI.</p>
-          </div>
+                <Camera 
+                  isActive={isCameraActive} 
+                  activeMode={activeMode}
+                  onCapture={handleCapture}
+                  onHandResults={handleHandResults}
+                />
+              </div>
+              
+              {!(isCameraActive && activeMode === 'hand') && (
+                <div className="text-center text-gray-500 text-sm mt-4">
+                  <p>1. Start the camera. 2. Select Face Mesh or Hand Pose. 3. Capture a photo to edit with AI.</p>
+                </div>
+              )}
+            </div>
 
-          {/* Gesture Trainer Section */}
-          {isCameraActive && activeMode === 'hand' && (
-             <GestureTrainer handPoseDataRef={handPoseResultsRef} />
-          )}
+            {/* Gesture Trainer Section - Side by Side on Large Screens */}
+            {isCameraActive && activeMode === 'hand' && (
+              <div className="w-full lg:w-[40%] lg:min-w-[420px]">
+                <GestureTrainer handPoseDataRef={handPoseResultsRef} />
+              </div>
+            )}
+          </div>
 
         </div>
       </main>

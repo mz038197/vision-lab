@@ -71,6 +71,7 @@ declare global {
       faceMesh: (options?: any) => Promise<ML5Model>;
       handPose: (options?: any) => Promise<ML5Model>;
       neuralNetwork: (options?: NeuralNetworkOptions) => ML5NeuralNetwork;
+      setBackend: (backend: 'webgl' | 'cpu' | 'webgpu') => Promise<void>;
     };
   }
 }
