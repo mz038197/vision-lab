@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: vision-lab
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm run render:build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+    healthCheckPath: /api/health
+
