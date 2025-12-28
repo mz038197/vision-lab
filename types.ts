@@ -50,6 +50,23 @@ export interface BodyPosePrediction {
   };
 }
 
+export interface ImageClassifierResult {
+  label: string;
+  confidence: number;
+}
+
+export interface ML5ImageClassifier {
+  classify: (
+    media: HTMLVideoElement | HTMLImageElement,
+    callback: (results: ImageClassifierResult[]) => void
+  ) => void;
+  classifyStart: (
+    media: HTMLVideoElement,
+    callback: (results: ImageClassifierResult[]) => void
+  ) => void;
+  classifyStop: () => void;
+}
+
 export interface ML5Model {
   detectStart: (
     media: HTMLVideoElement, 
@@ -91,6 +108,7 @@ declare global {
       faceMesh: (options?: any) => Promise<ML5Model>;
       handPose: (options?: any) => Promise<ML5Model>;
       bodyPose: (model?: 'MoveNet' | 'BlazePose', options?: any) => Promise<ML5Model>;
+      imageClassifier: (modelNameOrUrl: string, options?: any) => Promise<ML5ImageClassifier>;
       neuralNetwork: (options?: NeuralNetworkOptions) => ML5NeuralNetwork;
       setBackend: (backend: 'webgl' | 'cpu' | 'webgpu') => Promise<void>;
     };

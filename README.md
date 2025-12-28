@@ -51,8 +51,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/11LP0RJZbRO4rWg9tVwqIiM
 This app uses a client-server architecture for secure API key management:
 
 - **Frontend**: React + Vite + TypeScript (port 5173)
-  - User interface with camera, face mesh, hand pose detection
-  - Image editor with AI capabilities
+  - User interface with camera
+  - Face Mesh detection (expression & head pose recognition)
+  - Hand Pose detection (gesture recognition)
+  - Body Pose detection (MoveNet & BlazePose models)
+  - **Image Classifier** (NEW!)
+    - Pre-built models: MobileNet, Darknet, Darknet-tiny, DoodleNet
+    - Custom models: Teachable Machine integration
+  - Image editor with AI capabilities (Gemini-powered)
   
 - **Backend**: Express.js server (port 3001)
   - Secure API endpoint at `/api/gemini/edit-image`
@@ -65,6 +71,42 @@ This app uses a client-server architecture for secure API key management:
   3. Backend authenticates with Gemini API using server-side API key
   4. Backend returns edited image to frontend
   5. Frontend displays result
+
+## Features
+
+### 🎯 Image Classifier (NEW!)
+Real-time image classification using ml5.js with two modes:
+
+#### Pre-built Models
+- **MobileNet**: Recognizes 1000+ common objects
+- **Darknet**: Detailed YOLO-based object detection
+- **Darknet-tiny**: Fast YOLO-based detection
+- **DoodleNet**: Recognizes hand-drawn sketches
+
+#### Custom Models (Teachable Machine)
+Train your own model on [Teachable Machine](https://teachablemachine.withgoogle.com/) and use it directly:
+1. Train your model on Teachable Machine
+2. Copy the model URL (e.g., `https://teachablemachine.withgoogle.com/models/x09vetLC0/`)
+3. Paste it into Vision Lab's "Custom URL" field
+4. Start classifying!
+
+### 🤖 Face Mesh Detection
+- 468 facial landmarks tracking
+- Three feature extraction modes:
+  - **Distance Features** (25D): Expression recognition
+  - **Pose Features** (3D): Head orientation (yaw, pitch, roll)
+  - **Hybrid Features** (28D): Combined expressions + orientation
+
+### 👋 Hand Pose Detection
+- 21 hand landmarks per hand (up to 2 hands)
+- Gesture recognition with custom training
+- Normalized features (rotation, scale, translation invariant)
+
+### 🏃 Body Pose Detection
+- Full body keypoint tracking (17 points)
+- Two model options:
+  - **MoveNet**: Fast and efficient
+  - **BlazePose**: More accurate
 
 ## API Endpoints
 

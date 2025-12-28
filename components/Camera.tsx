@@ -4,14 +4,18 @@ import { FaceMeshPrediction, HandPosePrediction, BodyPosePrediction } from '../t
 
 interface CameraProps {
   isActive: boolean;
-  activeMode: 'none' | 'face' | 'hand' | 'body';
+  activeMode: 'none' | 'face' | 'hand' | 'body' | 'classifier';
   bodyPoseModel?: 'MoveNet' | 'BlazePose';
   onCapture: (imageData: string) => void;
   onHandResults?: (results: HandPosePrediction[]) => void;
+  onFaceResults?: (results: FaceMeshPrediction[]) => void;
+  onBodyResults?: (results: BodyPosePrediction[]) => void;
+  videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
-const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = 'MoveNet', onCapture, onHandResults }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = 'MoveNet', onCapture, onHandResults, onFaceResults, onBodyResults, videoRef: externalVideoRef }) => {
+  const internalVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = externalVideoRef || internalVideoRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [modelsLoaded, setModelsLoaded] = useState({ face: false, hand: false, body: false });
@@ -37,13 +41,23 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
   const lastBodyDetectTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number>(0);
 
-  // Ref for callback to avoid effect dependency cycles
+  // Ref for callbacks to avoid effect dependency cycles
   const onHandResultsRef = useRef(onHandResults);
+  const onFaceResultsRef = useRef(onFaceResults);
+  const onBodyResultsRef = useRef(onBodyResults);
 
   // Update refs when props change
   useEffect(() => {
     onHandResultsRef.current = onHandResults;
   }, [onHandResults]);
+
+  useEffect(() => {
+    onFaceResultsRef.current = onFaceResults;
+  }, [onFaceResults]);
+
+  useEffect(() => {
+    onBodyResultsRef.current = onBodyResults;
+  }, [onBodyResults]);
 
   useEffect(() => {
     activeModeRef.current = activeMode;
@@ -384,7 +398,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
       // 1. Clean up previous detection first
       stopDetection();
       
-      if (activeMode === 'none') return;
+      if (activeMode === 'none' || activeMode === 'classifier') return; // No detection needed for classifier mode
       if (!isActive || !stream) return;
 
       // 2. Debounce start: Wait 300ms before starting new detection.
@@ -422,7 +436,11 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                    if (activeModeRef.current !== activeMode) return; // Safety check
 
                    if (activeMode === 'face') {
-                      latestFacePredictionsRef.current = results as FaceMeshPrediction[];
+                      const faceResults = results as FaceMeshPrediction[];
+                      latestFacePredictionsRef.current = faceResults;
+                      if (onFaceResultsRef.current) {
+                          onFaceResultsRef.current(faceResults);
+                      }
                    } else if (activeMode === 'hand') {
                       const handResults = results as HandPosePrediction[];
                       if (handResults && handResults.length > 0) {
@@ -437,6 +455,9 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                       if (bodyResults && bodyResults.length > 0) {
                           latestBodyPredictionsRef.current = bodyResults;
                           lastBodyDetectTimeRef.current = performance.now();
+                      }
+                      if (onBodyResultsRef.current) {
+                          onBodyResultsRef.current(bodyResults);
                       }
                    }
                 });

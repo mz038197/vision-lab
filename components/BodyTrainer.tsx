@@ -1,14 +1,14 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ML5NeuralNetwork, HandPosePrediction } from '../types';
-import { getNormalizedHandVector } from '../utils/handUtils';
+import { ML5NeuralNetwork, BodyPosePrediction } from '../types';
+import { getNormalizedBodyVector } from '../utils/bodyUtils';
 import TrainingChart from './TrainingChart';
 
-interface GestureTrainerProps {
-  handPoseDataRef: React.MutableRefObject<HandPosePrediction[]>;
+interface BodyTrainerProps {
+  bodyPoseDataRef: React.MutableRefObject<BodyPosePrediction[]>;
 }
 
-const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
+const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef }) => {
   const [network, setNetwork] = useState<ML5NeuralNetwork | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState('');
@@ -40,7 +40,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
         const nn = window.ml5.neuralNetwork({
           task: 'classification',
           debug: false,
-          inputs: 42, // 21 keypoints * 2 (x, y)
+          inputs: 34, // 17 keypoints * 2 (x, y)
         });
         setNetwork(nn);
       }
@@ -56,12 +56,12 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     const classify = () => {
       if (isCancelled) return;
 
-      const currentData = handPoseDataRef.current;
+      const currentData = bodyPoseDataRef.current;
 
-      // Ensure we have a trained network and hand data
+      // Ensure we have a trained network and body data
       if (isTrained && network && currentData.length > 0) {
-        const input = getNormalizedHandVector(currentData[0]);
-        if (input.length === 42) {
+        const input = getNormalizedBodyVector(currentData[0]);
+        if (input.length === 34) {
           try {
             // NOTE: We wait for the callback BEFORE scheduling the next classification.
             // This prevents "stacking" inference calls which crashes the browser.
@@ -70,7 +70,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
               // ml5 v1: callback receives results directly (not error, results)
               if (results && Array.isArray(results) && results.length > 0) {
-                // Format: [{ label: 'One', confidence: 0.99 }, ...]
+                // Format: [{ label: 'Standing', confidence: 0.99 }, ...]
                 const topResult = results[0];
                 const label = topResult.label ?? '';
                 const confidence = topResult.confidence ?? 0;
@@ -101,7 +101,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
       isCancelled = true;
       clearTimeout(timerId);
     };
-  }, [isTrained, network, handPoseDataRef]); 
+  }, [isTrained, network, bodyPoseDataRef]); 
 
   const addLabel = () => {
     if (newLabel && !labels.includes(newLabel)) {
@@ -112,10 +112,10 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   };
 
   const collectData = (label: string) => {
-    if (!network || handPoseDataRef.current.length === 0) return;
+    if (!network || bodyPoseDataRef.current.length === 0) return;
 
-    const inputs = getNormalizedHandVector(handPoseDataRef.current[0]);
-    if (inputs.length === 42) {
+    const inputs = getNormalizedBodyVector(bodyPoseDataRef.current[0]);
+    if (inputs.length === 34) {
       const target = { label };
       network.addData(inputs, target);
       
@@ -184,7 +184,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
   const saveModel = () => {
     if (network) {
-      const name = prompt("Enter model name (will trigger download):", "my-hand-pose-model");
+      const name = prompt("Enter model name (will trigger download):", "my-body-pose-model");
       if (name) {
          network.save(name);
       }
@@ -261,7 +261,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     }
 
     // Create CSV content
-    const headers = ['label', ...Array.from({ length: 42 }, (_, i) => `feature_${i + 1}`)];
+    const headers = ['label', ...Array.from({ length: 34 }, (_, i) => `feature_${i + 1}`)];
     const csvRows = [headers.join(',')];
 
     trainingDataRef.current.forEach(({ inputs, label }) => {
@@ -274,7 +274,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `hand-gesture-training-data.csv`;
+    link.download = `body-pose-training-data.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -314,7 +314,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
           const label = values[0].trim();
           const inputs = values.slice(1).map(v => parseFloat(v));
 
-          if (label && inputs.length === 42 && inputs.every(v => !isNaN(v))) {
+          if (label && inputs.length === 34 && inputs.every(v => !isNaN(v))) {
             trainingDataRef.current.push({ inputs, label });
             newLabels.add(label);
             newDataCounts[label] = (newDataCounts[label] || 0) + 1;
@@ -348,7 +348,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
       {/* Header with Prediction Result */}
       <div className="bg-gray-800 p-4 border-b border-gray-700">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-white">Gesture Trainer</h3>
+          <h3 className="text-lg font-bold text-white">Body Pose Trainer</h3>
           {isTrained && (
             <span className="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded">Model Ready</span>
           )}
@@ -385,7 +385,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
               type="text" 
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="e.g. Rock"
+              placeholder="e.g. Standing"
               className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button 
@@ -554,4 +554,5 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   );
 };
 
-export default GestureTrainer;
+export default BodyTrainer;
+

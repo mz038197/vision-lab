@@ -1,14 +1,16 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ML5NeuralNetwork, HandPosePrediction } from '../types';
-import { getNormalizedHandVector } from '../utils/handUtils';
+import { ML5NeuralNetwork, FaceMeshPrediction } from '../types';
+import { getNormalizedFacePoseVector, getFaceDistanceFeatures, getHybridFaceVector } from '../utils/faceUtils';
 import TrainingChart from './TrainingChart';
 
-interface GestureTrainerProps {
-  handPoseDataRef: React.MutableRefObject<HandPosePrediction[]>;
+interface FaceTrainerProps {
+  faceMeshDataRef: React.MutableRefObject<FaceMeshPrediction[]>;
 }
 
-const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
+type FaceMode = 'distance' | 'pose' | 'hybrid';
+
+const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef }) => {
   const [network, setNetwork] = useState<ML5NeuralNetwork | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState('');
@@ -18,6 +20,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [classificationResult, setClassificationResult] = useState<string>('');
   const [confidence, setConfidence] = useState<number>(0);
+  const [faceMode, setFaceMode] = useState<FaceMode>('distance'); // 預設使用距離特徵
   
   // Training Hyperparameters
   const [epochs, setEpochs] = useState(50);
@@ -34,19 +37,29 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   // Store raw training data for CSV export
   const trainingDataRef = useRef<Array<{ inputs: number[], label: string }>>([]);
 
+  // Initialize network when face mode changes
   useEffect(() => {
     const initNetwork = () => {
       if (window.ml5) {
+        const inputSize = faceMode === 'distance' ? 25 : faceMode === 'pose' ? 3 : 28; // hybrid = 25 + 3
         const nn = window.ml5.neuralNetwork({
           task: 'classification',
           debug: false,
-          inputs: 42, // 21 keypoints * 2 (x, y)
+          inputs: inputSize,
         });
         setNetwork(nn);
+        
+        // Reset training state when mode changes
+        setLabels([]);
+        setDataCounts({});
+        setTrainingLogs([]);
+        setIsTrained(false);
+        setClassificationResult('');
+        setConfidence(0);
       }
     };
     initNetwork();
-  }, []);
+  }, [faceMode]);
 
   // Handle Classification Loop - Sequential to prevent crashing
   useEffect(() => {
@@ -56,12 +69,18 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     const classify = () => {
       if (isCancelled) return;
 
-      const currentData = handPoseDataRef.current;
+      const currentData = faceMeshDataRef.current;
 
-      // Ensure we have a trained network and hand data
+      // Ensure we have a trained network and face data
       if (isTrained && network && currentData.length > 0) {
-        const input = getNormalizedHandVector(currentData[0]);
-        if (input.length === 42) {
+        const input = faceMode === 'distance'
+          ? getFaceDistanceFeatures(currentData[0])
+          : faceMode === 'pose'
+          ? getNormalizedFacePoseVector(currentData[0])
+          : getHybridFaceVector(currentData[0]);
+        
+        const expectedSize = faceMode === 'distance' ? 25 : faceMode === 'pose' ? 3 : 28;
+        if (input.length === expectedSize) {
           try {
             // NOTE: We wait for the callback BEFORE scheduling the next classification.
             // This prevents "stacking" inference calls which crashes the browser.
@@ -70,7 +89,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
               // ml5 v1: callback receives results directly (not error, results)
               if (results && Array.isArray(results) && results.length > 0) {
-                // Format: [{ label: 'One', confidence: 0.99 }, ...]
+                // Format: [{ label: 'Happy', confidence: 0.99 }, ...]
                 const topResult = results[0];
                 const label = topResult.label ?? '';
                 const confidence = topResult.confidence ?? 0;
@@ -101,7 +120,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
       isCancelled = true;
       clearTimeout(timerId);
     };
-  }, [isTrained, network, handPoseDataRef]); 
+  }, [isTrained, network, faceMeshDataRef, faceMode]); 
 
   const addLabel = () => {
     if (newLabel && !labels.includes(newLabel)) {
@@ -112,10 +131,16 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   };
 
   const collectData = (label: string) => {
-    if (!network || handPoseDataRef.current.length === 0) return;
+    if (!network || faceMeshDataRef.current.length === 0) return;
 
-    const inputs = getNormalizedHandVector(handPoseDataRef.current[0]);
-    if (inputs.length === 42) {
+    const inputs = faceMode === 'distance'
+      ? getFaceDistanceFeatures(faceMeshDataRef.current[0])
+      : faceMode === 'pose'
+      ? getNormalizedFacePoseVector(faceMeshDataRef.current[0])
+      : getHybridFaceVector(faceMeshDataRef.current[0]);
+    
+    const expectedSize = faceMode === 'distance' ? 25 : faceMode === 'pose' ? 3 : 28;
+    if (inputs.length === expectedSize) {
       const target = { label };
       network.addData(inputs, target);
       
@@ -184,7 +209,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
 
   const saveModel = () => {
     if (network) {
-      const name = prompt("Enter model name (will trigger download):", "my-hand-pose-model");
+      const name = prompt("Enter model name (will trigger download):", `my-face-${faceMode}-model`);
       if (name) {
          network.save(name);
       }
@@ -216,9 +241,11 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     
     try {
       // Create a new neural network for loading
+      const inputSize = faceMode === 'distance' ? 25 : faceMode === 'pose' ? 3 : 28;
       const nn = window.ml5.neuralNetwork({
         task: 'classification',
         debug: false,
+        inputs: inputSize,
       });
 
       // Create object URLs for the files
@@ -261,7 +288,8 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     }
 
     // Create CSV content
-    const headers = ['label', ...Array.from({ length: 42 }, (_, i) => `feature_${i + 1}`)];
+    const featureCount = trainingDataRef.current[0].inputs.length;
+    const headers = ['label', ...Array.from({ length: featureCount }, (_, i) => `feature_${i + 1}`)];
     const csvRows = [headers.join(',')];
 
     trainingDataRef.current.forEach(({ inputs, label }) => {
@@ -274,7 +302,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `hand-gesture-training-data.csv`;
+    link.download = `face-${faceMode}-training-data.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -314,7 +342,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
           const label = values[0].trim();
           const inputs = values.slice(1).map(v => parseFloat(v));
 
-          if (label && inputs.length === 42 && inputs.every(v => !isNaN(v))) {
+          if (label && inputs.length > 0 && inputs.every(v => !isNaN(v))) {
             trainingDataRef.current.push({ inputs, label });
             newLabels.add(label);
             newDataCounts[label] = (newDataCounts[label] || 0) + 1;
@@ -348,10 +376,54 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
       {/* Header with Prediction Result */}
       <div className="bg-gray-800 p-4 border-b border-gray-700">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-white">Gesture Trainer</h3>
+          <h3 className="text-lg font-bold text-white">Face Trainer</h3>
           {isTrained && (
             <span className="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded">Model Ready</span>
           )}
+        </div>
+        
+        {/* Face Mode Selector */}
+        <div className="mb-3">
+          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Detection Mode</label>
+          <div className="bg-gray-900 rounded-lg p-1 flex items-center border border-gray-700">
+            <button
+              onClick={() => setFaceMode('distance')}
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                faceMode === 'distance'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Distance (25)
+            </button>
+            <button
+              onClick={() => setFaceMode('pose')}
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                faceMode === 'pose'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Pose (3)
+            </button>
+            <button
+              onClick={() => setFaceMode('hybrid')}
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                faceMode === 'hybrid'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Hybrid (28)
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {faceMode === 'distance' 
+              ? '🚀 Recommended: Fast training, rotation-invariant distance features for expressions' 
+              : faceMode === 'pose'
+              ? 'Detects head orientation: yaw, pitch, roll (3 features)'
+              : '🎯 Best: Combines expressions + head orientation (25 + 3 features)'}
+          </p>
         </div>
         
         {/* Prediction Banner */}
@@ -385,7 +457,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
               type="text" 
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="e.g. Rock"
+              placeholder={faceMode === 'distance' ? 'e.g. Happy' : faceMode === 'pose' ? 'e.g. Looking Left' : 'e.g. Happy + Looking Left'}
               className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button 
@@ -554,4 +626,5 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
   );
 };
 
-export default GestureTrainer;
+export default FaceTrainer;
+
