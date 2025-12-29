@@ -6,9 +6,10 @@ import TrainingChart from './TrainingChart';
 
 interface GestureTrainerProps {
   handPoseDataRef: React.MutableRefObject<HandPosePrediction[]>;
+  onClassificationResult?: (result: string) => void;
 }
 
-const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
+const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClassificationResult }) => {
   const [network, setNetwork] = useState<ML5NeuralNetwork | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState('');
@@ -77,6 +78,11 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef }) => {
                 
                 setClassificationResult(label);
                 setConfidence(confidence);
+                
+                // Pass result to parent component
+                if (onClassificationResult) {
+                  onClassificationResult(label);
+                }
               }
               
               // Schedule next inference only after this one is done

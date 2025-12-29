@@ -6,9 +6,10 @@ import TrainingChart from './TrainingChart';
 
 interface BodyTrainerProps {
   bodyPoseDataRef: React.MutableRefObject<BodyPosePrediction[]>;
+  onClassificationResult?: (result: string) => void;
 }
 
-const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef }) => {
+const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassificationResult }) => {
   const [network, setNetwork] = useState<ML5NeuralNetwork | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState('');
@@ -77,6 +78,11 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef }) => {
                 
                 setClassificationResult(label);
                 setConfidence(confidence);
+                
+                // Pass result to parent component
+                if (onClassificationResult) {
+                  onClassificationResult(label);
+                }
               }
               
               // Schedule next inference only after this one is done

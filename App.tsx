@@ -6,6 +6,7 @@ import GestureTrainer from './components/GestureTrainer';
 import FaceTrainer from './components/FaceTrainer';
 import BodyTrainer from './components/BodyTrainer';
 import ImageClassifier from './components/ImageClassifier';
+import CombinationClassifier from './components/CombinationClassifier';
 import { HandPosePrediction, FaceMeshPrediction, BodyPosePrediction } from './types';
 
 function App() {
@@ -30,6 +31,11 @@ function App() {
   const faceMeshResultsRef = useRef<FaceMeshPrediction[]>([]);
   const bodyPoseResultsRef = useRef<BodyPosePrediction[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Store latest classification results for combination classifier
+  const [faceClassification, setFaceClassification] = useState<string>('');
+  const [handClassification, setHandClassification] = useState<string>('');
+  const [bodyClassification, setBodyClassification] = useState<string>('');
 
   // Set ml5.js backend to WebGL
   useEffect(() => {
@@ -236,21 +242,30 @@ function App() {
                 {/* Gesture Trainer Section */}
                 {activeModes.hand && (
                   <div className="w-full">
-                    <GestureTrainer handPoseDataRef={handPoseResultsRef} />
+                    <GestureTrainer 
+                      handPoseDataRef={handPoseResultsRef}
+                      onClassificationResult={setHandClassification}
+                    />
                   </div>
                 )}
 
                 {/* Face Trainer Section */}
                 {activeModes.face && (
                   <div className="w-full">
-                    <FaceTrainer faceMeshDataRef={faceMeshResultsRef} />
+                    <FaceTrainer 
+                      faceMeshDataRef={faceMeshResultsRef}
+                      onClassificationResult={setFaceClassification}
+                    />
                   </div>
                 )}
 
                 {/* Body Trainer Section */}
                 {activeModes.body && (
                   <div className="w-full">
-                    <BodyTrainer bodyPoseDataRef={bodyPoseResultsRef} />
+                    <BodyTrainer 
+                      bodyPoseDataRef={bodyPoseResultsRef}
+                      onClassificationResult={setBodyClassification}
+                    />
                   </div>
                 )}
 
@@ -258,6 +273,22 @@ function App() {
                 {activeModes.classifier && (
                   <div className="w-full">
                     <ImageClassifier videoRef={videoRef} isActive={isCameraActive && activeModes.classifier} />
+                  </div>
+                )}
+
+                {/* Combination Classifier - Show when multiple trainers are active */}
+                {(activeModes.face || activeModes.hand || activeModes.body) && (
+                  <div className="w-full">
+                    <CombinationClassifier
+                      faceResult={faceClassification}
+                      handResult={handClassification}
+                      bodyResult={bodyClassification}
+                      activeModes={{
+                        face: activeModes.face,
+                        hand: activeModes.hand,
+                        body: activeModes.body
+                      }}
+                    />
                   </div>
                 )}
               </div>

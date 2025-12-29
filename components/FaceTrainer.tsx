@@ -6,11 +6,12 @@ import TrainingChart from './TrainingChart';
 
 interface FaceTrainerProps {
   faceMeshDataRef: React.MutableRefObject<FaceMeshPrediction[]>;
+  onClassificationResult?: (result: string) => void;
 }
 
 type FaceMode = 'distance' | 'pose' | 'hybrid';
 
-const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef }) => {
+const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef, onClassificationResult }) => {
   const [network, setNetwork] = useState<ML5NeuralNetwork | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState('');
@@ -96,6 +97,11 @@ const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef }) => {
                 
                 setClassificationResult(label);
                 setConfidence(confidence);
+                
+                // Pass result to parent component
+                if (onClassificationResult) {
+                  onClassificationResult(label);
+                }
               }
               
               // Schedule next inference only after this one is done
