@@ -11,8 +11,25 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
       return { chartData: [], maxLoss: 2, minLoss: 0 };
     }
 
-    // Sort by epoch
-    const sorted = [...trainingLogs].sort((a, b) => a.epoch - b.epoch);
+    // Sort by epoch and filter out invalid data (NaN, undefined, null)
+    const sorted = [...trainingLogs]
+      .filter(log => {
+        return (
+          log &&
+          typeof log.epoch === 'number' &&
+          typeof log.loss === 'number' &&
+          !isNaN(log.epoch) &&
+          !isNaN(log.loss) &&
+          isFinite(log.epoch) &&
+          isFinite(log.loss)
+        );
+      })
+      .sort((a, b) => a.epoch - b.epoch);
+    
+    // If no valid data after filtering, return defaults
+    if (sorted.length === 0) {
+      return { chartData: [], maxLoss: 2, minLoss: 0 };
+    }
     
     // Find min and max loss for scaling
     const losses = sorted.map(log => log.loss);
@@ -27,7 +44,7 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
     return {
       chartData: sorted,
       maxLoss: paddedMax || 2,
-      minLoss: paddedMin,
+      minLoss: paddedMin || 0,
     };
   }, [trainingLogs]);
 
@@ -44,6 +61,10 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
   };
 
   const scaleY = (loss: number) => {
+    // Ensure valid numbers and avoid division by zero
+    if (!isFinite(loss) || isNaN(loss)) return height - padding.bottom;
+    if (maxLoss === minLoss) return height - padding.bottom - chartHeight / 2;
+    
     const normalized = (loss - minLoss) / (maxLoss - minLoss);
     return height - padding.bottom - normalized * chartHeight;
   };
@@ -84,7 +105,10 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
     const ticks = [];
     for (let i = 0; i <= tickCount; i++) {
       const value = minLoss + (maxLoss - minLoss) * (i / tickCount);
-      ticks.push(value);
+      // Only add valid ticks
+      if (isFinite(value) && !isNaN(value)) {
+        ticks.push(value);
+      }
     }
     return ticks.reverse();
   }, [maxLoss, minLoss]);
@@ -120,19 +144,25 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
         </defs>
         
         {/* Grid lines */}
-        {yTicks.map((tick, i) => (
-          <g key={`grid-${i}`}>
-            <line
-              x1={padding.left}
-              y1={scaleY(tick)}
-              x2={width - padding.right}
-              y2={scaleY(tick)}
-              stroke="#374151"
-              strokeWidth="1"
-              strokeDasharray="4,4"
-            />
-          </g>
-        ))}
+        {yTicks.map((tick, i) => {
+          const yPos = scaleY(tick);
+          // Only render if position is valid
+          if (!isFinite(yPos) || isNaN(yPos)) return null;
+          
+          return (
+            <g key={`grid-${i}`}>
+              <line
+                x1={padding.left}
+                y1={yPos}
+                x2={width - padding.right}
+                y2={yPos}
+                stroke="#374151"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+              />
+            </g>
+          );
+        })}
 
         {/* X-axis */}
         <line
@@ -155,19 +185,25 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
         />
 
         {/* Y-axis labels */}
-        {yTicks.map((tick, i) => (
-          <text
-            key={`y-label-${i}`}
-            x={padding.left - 10}
-            y={scaleY(tick)}
-            textAnchor="end"
-            dominantBaseline="middle"
-            fill="#9CA3AF"
-            fontSize="11"
-          >
-            {tick.toFixed(2)}
-          </text>
-        ))}
+        {yTicks.map((tick, i) => {
+          const yPos = scaleY(tick);
+          // Only render if position is valid
+          if (!isFinite(yPos) || isNaN(yPos)) return null;
+          
+          return (
+            <text
+              key={`y-label-${i}`}
+              x={padding.left - 10}
+              y={yPos}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fill="#9CA3AF"
+              fontSize="11"
+            >
+              {tick.toFixed(2)}
+            </text>
+          );
+        })}
 
         {/* X-axis labels */}
         {xTicks.map((tick, i) => (
@@ -229,36 +265,52 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
         )}
 
         {/* Data points */}
-        {chartData.map((log, i) => (
-          <circle
-            key={`point-${i}`}
-            cx={scaleX(log.epoch)}
-            cy={scaleY(log.loss)}
-            r="3"
-            fill="#3B82F6"
-            stroke="#1E3A8A"
-            strokeWidth="2"
-          />
-        ))}
+        {chartData.map((log, i) => {
+          const x = scaleX(log.epoch);
+          const y = scaleY(log.loss);
+          // Only render if coordinates are valid
+          if (!isFinite(x) || !isFinite(y) || isNaN(x) || isNaN(y)) return null;
+          
+          return (
+            <circle
+              key={`point-${i}`}
+              cx={x}
+              cy={y}
+              r="3"
+              fill="#3B82F6"
+              stroke="#1E3A8A"
+              strokeWidth="2"
+            />
+          );
+        })}
 
         {/* Latest point highlight */}
-        {chartData.length > 0 && (
-          <circle
-            cx={scaleX(chartData[chartData.length - 1].epoch)}
-            cy={scaleY(chartData[chartData.length - 1].loss)}
-            r="5"
-            fill="#3B82F6"
-            stroke="#fff"
-            strokeWidth="2"
-          >
-            <animate
-              attributeName="r"
-              values="5;7;5"
-              dur="1.5s"
-              repeatCount="indefinite"
-            />
-          </circle>
-        )}
+        {chartData.length > 0 && (() => {
+          const lastPoint = chartData[chartData.length - 1];
+          const x = scaleX(lastPoint.epoch);
+          const y = scaleY(lastPoint.loss);
+          
+          // Only render if coordinates are valid
+          if (!isFinite(x) || !isFinite(y) || isNaN(x) || isNaN(y)) return null;
+          
+          return (
+            <circle
+              cx={x}
+              cy={y}
+              r="5"
+              fill="#3B82F6"
+              stroke="#fff"
+              strokeWidth="2"
+            >
+              <animate
+                attributeName="r"
+                values="5;7;5"
+                dur="1.5s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          );
+        })()}
       </svg>
 
       {/* Legend */}
@@ -268,15 +320,21 @@ const TrainingChart: React.FC<TrainingChartProps> = ({ trainingLogs, maxEpochs =
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <span>loss</span>
           </div>
-          <span>
-            Latest: <span className="text-blue-400 font-semibold">
-              {chartData[chartData.length - 1]?.loss.toFixed(4)}
+          {chartData.length > 0 && chartData[chartData.length - 1] && (
+            <span>
+              Latest: <span className="text-blue-400 font-semibold">
+                {isFinite(chartData[chartData.length - 1].loss) && !isNaN(chartData[chartData.length - 1].loss)
+                  ? chartData[chartData.length - 1].loss.toFixed(4)
+                  : 'N/A'}
+              </span>
             </span>
-          </span>
+          )}
         </div>
-        <span className="text-gray-500">
-          Epoch {chartData[chartData.length - 1]?.epoch + 1} / {maxEpochs}
-        </span>
+        {chartData.length > 0 && chartData[chartData.length - 1] && (
+          <span className="text-gray-500">
+            Epoch {chartData[chartData.length - 1].epoch + 1} / {maxEpochs}
+          </span>
+        )}
       </div>
     </div>
   );

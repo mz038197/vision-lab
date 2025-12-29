@@ -349,10 +349,10 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
   };
 
   return (
-    <div className="w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-2xl flex flex-col h-full max-h-[calc(100vh-180px)]">
+    <div className="w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-2xl flex flex-col">
       
       {/* Header with Prediction Result */}
-      <div className="bg-gray-800 p-4 border-b border-gray-700">
+      <div className="bg-gray-800 p-4 border-b border-gray-700 flex-none">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-white">Body Pose Trainer</h3>
           {isTrained && (
@@ -381,7 +381,7 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
       </div>
       
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="overflow-y-auto p-4 space-y-4 flex-none max-h-[400px]">
         
         {/* Add Class */}
         <div className="space-y-2">
@@ -479,7 +479,7 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-gray-700 bg-gray-800 space-y-2">
+      <div className="p-4 border-t border-gray-700 bg-gray-800 space-y-2 flex-none">
         <button
           onClick={trainModel}
           disabled={labels.length < 2 || isTraining || isLoading || Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) === 0}

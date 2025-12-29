@@ -27,7 +27,22 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
   bodyResult,
   activeModes
 }) => {
-  const [rules, setRules] = useState<CombinationRule[]>([]);
+  const STORAGE_KEY = 'visionlab-combination-rules';
+  
+  // Load rules from localStorage on mount
+  const [rules, setRules] = useState<CombinationRule[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (error) {
+      console.error('Failed to load rules from localStorage:', error);
+    }
+    return [];
+  });
+  
   const [newRule, setNewRule] = useState({
     faceLabel: '',
     handLabel: '',
@@ -36,6 +51,15 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
   });
   const [matchedRule, setMatchedRule] = useState<CombinationRule | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Save rules to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
+    } catch (error) {
+      console.error('Failed to save rules to localStorage:', error);
+    }
+  }, [rules]);
 
   // Check for matching rules
   useEffect(() => {
@@ -112,6 +136,15 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
     setRules(rules.filter(r => r.id !== id));
   };
 
+  const clearAllRules = () => {
+    if (rules.length === 0) return;
+    
+    if (window.confirm(`確定要清空所有 ${rules.length} 條規則嗎？此操作無法復原。`)) {
+      setRules([]);
+      setMatchedRule(null);
+    }
+  };
+
   const toggleRule = (id: string) => {
     setRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   };
@@ -148,9 +181,9 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
   };
 
   return (
-    <div className="w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-2xl flex flex-col h-full max-h-[calc(100vh-180px)]">
+    <div className="w-full bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-2xl flex flex-col">
       {/* Header with Result Display */}
-      <div className="bg-gray-800 p-4 border-b border-gray-700">
+      <div className="bg-gray-800 p-4 border-b border-gray-700 flex-none">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-white">組合識別器</h3>
           <span className="text-xs bg-purple-600/20 text-purple-400 px-2 py-1 rounded">
@@ -213,7 +246,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="overflow-y-auto p-4 space-y-4 flex-none max-h-[400px]">
         {/* Add Rule Button */}
         {!showAddForm && (
           <button
@@ -308,9 +341,23 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
 
         {/* Rules List */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            規則列表 ({rules.length})
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              規則列表 ({rules.length})
+            </label>
+            {rules.length > 0 && (
+              <button
+                onClick={clearAllRules}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                title="清空所有規則"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                清空全部
+              </button>
+            )}
+          </div>
           {rules.length === 0 ? (
             <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
               尚無規則，請新增組合規則
@@ -376,7 +423,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-gray-700 bg-gray-800 space-y-2">
+      <div className="p-4 border-t border-gray-700 bg-gray-800 space-y-2 flex-none">
         <div className="flex gap-2">
           <button
             onClick={exportRules}

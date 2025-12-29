@@ -124,12 +124,12 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content - Scrollable Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 w-full scroll-smooth">
-        <div className="max-w-[1600px] mx-auto flex flex-col gap-4">
+      {/* Main Content - Fixed Height, No Scroll */}
+      <main className="flex-1 overflow-hidden p-4 md:p-6 w-full flex flex-col">
+        <div className="max-w-[1600px] mx-auto flex flex-col gap-4 h-full">
           
-          {/* Control Panel */}
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          {/* Control Panel - Fixed at Top */}
+          <div className="flex-none flex flex-wrap items-center justify-center gap-4">
              {/* Camera Toggle */}
              <button
                onClick={toggleCamera}
@@ -206,12 +206,12 @@ function App() {
              )}
           </div>
 
-          {/* Main Layout: Camera + Trainer Side by Side */}
-          <div className={`flex flex-col ${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-row' : ''} gap-4 items-start`}>
+          {/* Main Layout: Camera + Trainer Side by Side - Fill Remaining Height */}
+          <div className={`flex-1 flex flex-col ${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-row' : ''} gap-4 items-start overflow-hidden`}>
             
-            {/* Camera Viewport */}
-            <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0`}>
-              <div className="aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
+            {/* Camera Viewport - Fixed, No Scroll */}
+            <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0 flex flex-col items-center h-full`}>
+              <div className="w-full aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
                 <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
                 <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-indigo-500/50 rounded-bl-2xl z-20 pointer-events-none"></div>
@@ -236,12 +236,12 @@ function App() {
               )}
             </div>
 
-            {/* Trainer Panels - Show active trainers side by side */}
+            {/* Trainer Panels - Independent Scroll Area */}
             {isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) && (
-              <div className="w-full lg:w-[40%] lg:min-w-[420px] space-y-4">
+              <div className="w-full lg:w-[40%] lg:min-w-[420px] h-full overflow-y-auto space-y-4 pr-2">
                 {/* Gesture Trainer Section */}
                 {activeModes.hand && (
-                  <div className="w-full">
+                  <div className="w-full flex-shrink-0">
                     <GestureTrainer 
                       handPoseDataRef={handPoseResultsRef}
                       onClassificationResult={setHandClassification}
@@ -251,7 +251,7 @@ function App() {
 
                 {/* Face Trainer Section */}
                 {activeModes.face && (
-                  <div className="w-full">
+                  <div className="w-full flex-shrink-0">
                     <FaceTrainer 
                       faceMeshDataRef={faceMeshResultsRef}
                       onClassificationResult={setFaceClassification}
@@ -261,7 +261,7 @@ function App() {
 
                 {/* Body Trainer Section */}
                 {activeModes.body && (
-                  <div className="w-full">
+                  <div className="w-full flex-shrink-0">
                     <BodyTrainer 
                       bodyPoseDataRef={bodyPoseResultsRef}
                       onClassificationResult={setBodyClassification}
@@ -271,14 +271,14 @@ function App() {
 
                 {/* Image Classifier Section */}
                 {activeModes.classifier && (
-                  <div className="w-full">
+                  <div className="w-full flex-shrink-0">
                     <ImageClassifier videoRef={videoRef} isActive={isCameraActive && activeModes.classifier} />
                   </div>
                 )}
 
                 {/* Combination Classifier - Show when multiple trainers are active */}
                 {(activeModes.face || activeModes.hand || activeModes.body) && (
-                  <div className="w-full">
+                  <div className="w-full flex-shrink-0">
                     <CombinationClassifier
                       faceResult={faceClassification}
                       handResult={handClassification}
