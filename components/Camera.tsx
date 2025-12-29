@@ -4,7 +4,12 @@ import { FaceMeshPrediction, HandPosePrediction, BodyPosePrediction } from '../t
 
 interface CameraProps {
   isActive: boolean;
-  activeMode: 'none' | 'face' | 'hand' | 'body' | 'classifier';
+  activeModes: {
+    face: boolean;
+    hand: boolean;
+    body: boolean;
+    classifier: boolean;
+  };
   bodyPoseModel?: 'MoveNet' | 'BlazePose';
   onCapture: (imageData: string) => void;
   onHandResults?: (results: HandPosePrediction[]) => void;
@@ -13,7 +18,7 @@ interface CameraProps {
   videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
-const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = 'MoveNet', onCapture, onHandResults, onFaceResults, onBodyResults, videoRef: externalVideoRef }) => {
+const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 'MoveNet', onCapture, onHandResults, onFaceResults, onBodyResults, videoRef: externalVideoRef }) => {
   const internalVideoRef = useRef<HTMLVideoElement>(null);
   const videoRef = externalVideoRef || internalVideoRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,9 +33,13 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
   const bodyPoseRef = useRef<any>(null);
   const loadingLockRef = useRef(false);
   
-  // Ref to track detection state
-  const isDetectingRef = useRef(false);
-  const activeModeRef = useRef(activeMode); // Keep track of active mode in ref for render loop
+  // Ref to track detection state for each model
+  const isDetectingRef = useRef({
+    face: false,
+    hand: false,
+    body: false
+  });
+  const activeModesRef = useRef(activeModes); // Keep track of active modes in ref for render loop
   const bodyPoseModelRef = useRef(bodyPoseModel);
 
   // Refs for data to decouple detection rate from render rate
@@ -60,8 +69,8 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
   }, [onBodyResults]);
 
   useEffect(() => {
-    activeModeRef.current = activeMode;
-  }, [activeMode]);
+    activeModesRef.current = activeModes;
+  }, [activeModes]);
 
   useEffect(() => {
     bodyPoseModelRef.current = bodyPoseModel;
@@ -180,8 +189,8 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
     const switchBodyPoseModel = async () => {
       if (!window.ml5) return;
       
-      // Only switch if we're in body mode or about to enter it
-      if (activeMode !== 'body' && activeModeRef.current !== 'body') return;
+      // Only switch if body mode is active
+      if (!activeModes.body && !activeModesRef.current.body) return;
       
       try {
         // Stop current detection
@@ -189,7 +198,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
           bodyPoseRef.current.detectStop();
         }
         
-        isDetectingRef.current = false;
+        isDetectingRef.current.body = false;
         
         // Load new model
         setModelsLoaded(prev => ({ ...prev, body: false }));
@@ -214,7 +223,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
   const renderLoop = useCallback(() => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    const currentMode = activeModeRef.current;
+    const currentModes = activeModesRef.current;
     
     if (!canvas || !video) {
         animationFrameRef.current = requestAnimationFrame(renderLoop);
@@ -236,7 +245,8 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 1.0;
 
-    if (currentMode === 'face') {
+    // Draw face mesh if active
+    if (currentModes.face) {
         const predictions = latestFacePredictionsRef.current;
         if (predictions && predictions.length > 0) {
             const time = performance.now() / 200; 
@@ -252,7 +262,10 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                 });
             });
         }
-    } else if (currentMode === 'hand') {
+    }
+    
+    // Draw hand pose if active
+    if (currentModes.hand) {
         const predictions = latestHandPredictionsRef.current;
         const now = performance.now();
         const timeSinceLastDetection = now - lastHandDetectTimeRef.current;
@@ -299,8 +312,13 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                   ctx.fillRect(point.x - 3, point.y - 3, 6, 6);
                 });
             });
+            
+            ctx.globalAlpha = 1.0; // Reset alpha
         }
-    } else if (currentMode === 'body') {
+    }
+    
+    // Draw body pose if active
+    if (currentModes.body) {
         const predictions = latestBodyPredictionsRef.current;
         const now = performance.now();
         const timeSinceLastDetection = now - lastBodyDetectTimeRef.current;
@@ -353,6 +371,8 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                   }
                 });
             });
+            
+            ctx.globalAlpha = 1.0; // Reset alpha
         }
     }
 
@@ -381,7 +401,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
           console.warn("Error stopping models", e);
       }
 
-      isDetectingRef.current = false;
+      isDetectingRef.current = { face: false, hand: false, body: false };
       latestFacePredictionsRef.current = [];
       latestHandPredictionsRef.current = [];
       latestBodyPredictionsRef.current = [];
@@ -398,25 +418,21 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
       // 1. Clean up previous detection first
       stopDetection();
       
-      if (activeMode === 'none' || activeMode === 'classifier') return; // No detection needed for classifier mode
-      if (!isActive || !stream) return;
+      // Check if any mode is active (excluding classifier which doesn't need detection)
+      const hasActiveMode = activeModes.face || activeModes.hand || activeModes.body;
+      if (!hasActiveMode || !isActive || !stream) return;
 
       // 2. Debounce start: Wait 300ms before starting new detection.
       // This prevents rapid switching from crashing the browser and gives DOM time to settle.
       detectionStartTimeout = setTimeout(() => {
         const video = videoRef.current;
         
-        // 3. Poll for readiness (Video + Model)
-        // We poll instead of depending on 'modelsLoaded' state to avoid useEffect re-triggering loop
+        // 3. Poll for readiness (Video + Models)
         detectionInterval = window.setInterval(() => {
           if (!video || video.paused || video.ended) return;
           
-          const model = activeMode === 'face' ? faceMeshRef.current : 
-                       activeMode === 'hand' ? handPoseRef.current :
-                       activeMode === 'body' ? bodyPoseRef.current : null;
-
           // Check if everything is ready
-          if (video.readyState >= 2 && video.videoWidth > 0 && model) {
+          if (video.readyState >= 2 && video.videoWidth > 0) {
             // Stop polling
             clearInterval(detectionInterval as any);
             detectionInterval = null;
@@ -427,43 +443,66 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
                 video.height = video.videoHeight;
             }
 
-            if (!isDetectingRef.current) {
-              isDetectingRef.current = true;
-              
+            // Start face detection if active
+            if (activeModes.face && faceMeshRef.current && !isDetectingRef.current.face) {
+              isDetectingRef.current.face = true;
               try {
-                // ml5 detectStart runs a continuous loop internally
-                model.detectStart(video, (results: any[]) => {
-                   if (activeModeRef.current !== activeMode) return; // Safety check
+                faceMeshRef.current.detectStart(video, (results: any[]) => {
+                   if (!activeModesRef.current.face) return; // Safety check
 
-                   if (activeMode === 'face') {
-                      const faceResults = results as FaceMeshPrediction[];
-                      latestFacePredictionsRef.current = faceResults;
-                      if (onFaceResultsRef.current) {
-                          onFaceResultsRef.current(faceResults);
-                      }
-                   } else if (activeMode === 'hand') {
-                      const handResults = results as HandPosePrediction[];
-                      if (handResults && handResults.length > 0) {
-                          latestHandPredictionsRef.current = handResults;
-                          lastHandDetectTimeRef.current = performance.now();
-                      }
-                      if (onHandResultsRef.current) {
-                          onHandResultsRef.current(handResults);
-                      }
-                   } else if (activeMode === 'body') {
-                      const bodyResults = results as BodyPosePrediction[];
-                      if (bodyResults && bodyResults.length > 0) {
-                          latestBodyPredictionsRef.current = bodyResults;
-                          lastBodyDetectTimeRef.current = performance.now();
-                      }
-                      if (onBodyResultsRef.current) {
-                          onBodyResultsRef.current(bodyResults);
-                      }
+                   const faceResults = results as FaceMeshPrediction[];
+                   latestFacePredictionsRef.current = faceResults;
+                   if (onFaceResultsRef.current) {
+                       onFaceResultsRef.current(faceResults);
                    }
                 });
               } catch (err) {
-                console.error("Error during detectStart:", err);
-                isDetectingRef.current = false;
+                console.error("Error starting face detection:", err);
+                isDetectingRef.current.face = false;
+              }
+            }
+
+            // Start hand detection if active
+            if (activeModes.hand && handPoseRef.current && !isDetectingRef.current.hand) {
+              isDetectingRef.current.hand = true;
+              try {
+                handPoseRef.current.detectStart(video, (results: any[]) => {
+                   if (!activeModesRef.current.hand) return; // Safety check
+
+                   const handResults = results as HandPosePrediction[];
+                   if (handResults && handResults.length > 0) {
+                       latestHandPredictionsRef.current = handResults;
+                       lastHandDetectTimeRef.current = performance.now();
+                   }
+                   if (onHandResultsRef.current) {
+                       onHandResultsRef.current(handResults);
+                   }
+                });
+              } catch (err) {
+                console.error("Error starting hand detection:", err);
+                isDetectingRef.current.hand = false;
+              }
+            }
+
+            // Start body detection if active
+            if (activeModes.body && bodyPoseRef.current && !isDetectingRef.current.body) {
+              isDetectingRef.current.body = true;
+              try {
+                bodyPoseRef.current.detectStart(video, (results: any[]) => {
+                   if (!activeModesRef.current.body) return; // Safety check
+
+                   const bodyResults = results as BodyPosePrediction[];
+                   if (bodyResults && bodyResults.length > 0) {
+                       latestBodyPredictionsRef.current = bodyResults;
+                       lastBodyDetectTimeRef.current = performance.now();
+                   }
+                   if (onBodyResultsRef.current) {
+                       onBodyResultsRef.current(bodyResults);
+                   }
+                });
+              } catch (err) {
+                console.error("Error starting body detection:", err);
+                isDetectingRef.current.body = false;
               }
             }
           }
@@ -481,7 +520,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
       stopDetection();
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isActive, activeMode, stream, renderLoop, modelVersion]); // Added modelVersion to trigger restart
+  }, [isActive, activeModes.face, activeModes.hand, activeModes.body, stream, renderLoop, modelVersion]); // React to individual mode changes
 
   const captureImage = useCallback(() => {
     if (videoRef.current) {
@@ -538,9 +577,9 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeMode, bodyPoseModel = '
         style={{ display: isActive ? 'block' : 'none' }}
       />
 
-      {isActive && activeMode !== 'none' && (!modelsLoaded.face || !modelsLoaded.hand || !modelsLoaded.body) && (
+      {isActive && (activeModes.face || activeModes.hand || activeModes.body) && (!modelsLoaded.face || !modelsLoaded.hand || !modelsLoaded.body) && (
         <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur px-3 py-1 rounded-full text-xs text-yellow-300 border border-yellow-500/30 animate-pulse">
-          Loading {activeMode === 'body' ? `${bodyPoseModel} ` : ''}Model...
+          Loading Models...
         </div>
       )}
 

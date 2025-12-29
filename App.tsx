@@ -10,7 +10,18 @@ import { HandPosePrediction, FaceMeshPrediction, BodyPosePrediction } from './ty
 
 function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [activeMode, setActiveMode] = useState<'none' | 'face' | 'hand' | 'body' | 'classifier'>('none');
+  // Change to multiple selection instead of single mode
+  const [activeModes, setActiveModes] = useState<{
+    face: boolean;
+    hand: boolean;
+    body: boolean;
+    classifier: boolean;
+  }>({
+    face: false,
+    hand: false,
+    body: false,
+    classifier: false,
+  });
   const [bodyPoseModel, setBodyPoseModel] = useState<'MoveNet' | 'BlazePose'>('MoveNet');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   
@@ -38,10 +49,30 @@ function App() {
   const toggleCamera = () => {
     setIsCameraActive(!isCameraActive);
     if (isCameraActive) {
-      setActiveMode('none');
+      // Reset all modes when camera is turned off
+      setActiveModes({
+        face: false,
+        hand: false,
+        body: false,
+        classifier: false,
+      });
       handPoseResultsRef.current = [];
       faceMeshResultsRef.current = [];
       bodyPoseResultsRef.current = [];
+    }
+  };
+
+  const toggleMode = (mode: 'face' | 'hand' | 'body' | 'classifier') => {
+    setActiveModes(prev => ({
+      ...prev,
+      [mode]: !prev[mode]
+    }));
+    
+    // Clear data when disabling a mode
+    if (activeModes[mode]) {
+      if (mode === 'hand') handPoseResultsRef.current = [];
+      if (mode === 'face') faceMeshResultsRef.current = [];
+      if (mode === 'body') bodyPoseResultsRef.current = [];
     }
   };
 
@@ -112,34 +143,38 @@ function App() {
              </button>
 
              {/* Detection Mode Selectors */}
-             <div className="bg-gray-800 rounded-full p-1 flex items-center border border-gray-700 shadow-inner">
-               {['none', 'face', 'hand', 'body', 'classifier'].map((mode) => (
+             <div className="flex flex-wrap items-center gap-2">
+               {[
+                 { key: 'face' as const, label: 'Face Mesh', icon: '👤' },
+                 { key: 'hand' as const, label: 'Hand Pose', icon: '✋' },
+                 { key: 'body' as const, label: 'Body Pose', icon: '🏃' },
+                 { key: 'classifier' as const, label: 'Classifier', icon: '🔍' }
+               ].map(({ key, label, icon }) => (
                   <button
-                    key={mode}
-                    onClick={() => {
-                        setActiveMode(mode as any);
-                        if (mode !== 'hand') handPoseResultsRef.current = [];
-                        if (mode !== 'face') faceMeshResultsRef.current = [];
-                        if (mode !== 'body') bodyPoseResultsRef.current = [];
-                    }}
+                    key={key}
+                    onClick={() => toggleMode(key)}
                     disabled={!isCameraActive}
-                    className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                      activeMode === mode && isCameraActive
-                        ? 'bg-gray-700 text-white shadow-sm ring-1 ring-gray-600'
-                        : 'text-gray-400 hover:text-gray-200'
-                    } ${!isCameraActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                      activeModes[key] && isCameraActive
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/25'
+                        : isCameraActive
+                        ? 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700 hover:text-white'
+                        : 'bg-gray-800 text-gray-600 border-gray-700 cursor-not-allowed opacity-50'
+                    }`}
                   >
-                    {mode === 'none' && 'No Effects'}
-                    {mode === 'face' && 'Face Mesh'}
-                    {mode === 'hand' && 'Hand Pose'}
-                    {mode === 'body' && 'Body Pose'}
-                    {mode === 'classifier' && 'Classifier'}
+                    <span>{icon}</span>
+                    <span>{label}</span>
+                    {activeModes[key] && isCameraActive && (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
                   </button>
                ))}
              </div>
 
              {/* BodyPose Model Selector - Only show when body mode is active */}
-             {isCameraActive && activeMode === 'body' && (
+             {isCameraActive && activeModes.body && (
                <div className="bg-gray-800 rounded-full p-1 flex items-center border border-gray-700 shadow-inner">
                  <button
                    onClick={() => setBodyPoseModel('MoveNet')}
@@ -166,10 +201,10 @@ function App() {
           </div>
 
           {/* Main Layout: Camera + Trainer Side by Side */}
-          <div className={`flex flex-col ${isCameraActive && (activeMode === 'hand' || activeMode === 'face' || activeMode === 'body' || activeMode === 'classifier') ? 'lg:flex-row' : ''} gap-4 items-start`}>
+          <div className={`flex flex-col ${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-row' : ''} gap-4 items-start`}>
             
             {/* Camera Viewport */}
-            <div className={`${isCameraActive && (activeMode === 'hand' || activeMode === 'face' || activeMode === 'body' || activeMode === 'classifier') ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0`}>
+            <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0`}>
               <div className="aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
                 <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
                 <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
@@ -178,7 +213,7 @@ function App() {
 
                 <Camera 
                   isActive={isCameraActive} 
-                  activeMode={activeMode}
+                  activeModes={activeModes}
                   bodyPoseModel={bodyPoseModel}
                   onCapture={handleCapture}
                   onHandResults={handleHandResults}
@@ -188,38 +223,43 @@ function App() {
                 />
               </div>
               
-              {!(isCameraActive && (activeMode === 'hand' || activeMode === 'face' || activeMode === 'body' || activeMode === 'classifier')) && (
+              {!(isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier)) && (
                 <div className="text-center text-gray-500 text-sm mt-4">
-                  <p>1. Start the camera. 2. Select Face Mesh, Hand Pose, Body Pose, or Image Classifier. 3. Capture a photo to edit with AI.</p>
+                  <p>1. Start the camera. 2. Select one or more detection modes (Face, Hand, Body, Classifier). 3. Capture a photo to edit with AI.</p>
                 </div>
               )}
             </div>
 
-            {/* Gesture Trainer Section - Side by Side on Large Screens */}
-            {isCameraActive && activeMode === 'hand' && (
-              <div className="w-full lg:w-[40%] lg:min-w-[420px]">
-                <GestureTrainer handPoseDataRef={handPoseResultsRef} />
-              </div>
-            )}
+            {/* Trainer Panels - Show active trainers side by side */}
+            {isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) && (
+              <div className="w-full lg:w-[40%] lg:min-w-[420px] space-y-4">
+                {/* Gesture Trainer Section */}
+                {activeModes.hand && (
+                  <div className="w-full">
+                    <GestureTrainer handPoseDataRef={handPoseResultsRef} />
+                  </div>
+                )}
 
-            {/* Face Trainer Section - Side by Side on Large Screens */}
-            {isCameraActive && activeMode === 'face' && (
-              <div className="w-full lg:w-[40%] lg:min-w-[420px]">
-                <FaceTrainer faceMeshDataRef={faceMeshResultsRef} />
-              </div>
-            )}
+                {/* Face Trainer Section */}
+                {activeModes.face && (
+                  <div className="w-full">
+                    <FaceTrainer faceMeshDataRef={faceMeshResultsRef} />
+                  </div>
+                )}
 
-            {/* Body Trainer Section - Side by Side on Large Screens */}
-            {isCameraActive && activeMode === 'body' && (
-              <div className="w-full lg:w-[40%] lg:min-w-[420px]">
-                <BodyTrainer bodyPoseDataRef={bodyPoseResultsRef} />
-              </div>
-            )}
+                {/* Body Trainer Section */}
+                {activeModes.body && (
+                  <div className="w-full">
+                    <BodyTrainer bodyPoseDataRef={bodyPoseResultsRef} />
+                  </div>
+                )}
 
-            {/* Image Classifier Section - Side by Side on Large Screens */}
-            {isCameraActive && activeMode === 'classifier' && (
-              <div className="w-full lg:w-[40%] lg:min-w-[420px]">
-                <ImageClassifier videoRef={videoRef} isActive={isCameraActive && activeMode === 'classifier'} />
+                {/* Image Classifier Section */}
+                {activeModes.classifier && (
+                  <div className="w-full">
+                    <ImageClassifier videoRef={videoRef} isActive={isCameraActive && activeModes.classifier} />
+                  </div>
+                )}
               </div>
             )}
           </div>
