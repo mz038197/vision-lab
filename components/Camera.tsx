@@ -597,18 +597,6 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
           Loading Models...
         </div>
       )}
-
-      {isActive && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center z-20">
-          <button
-            onClick={captureImage}
-            className="group relative flex items-center justify-center w-16 h-16 rounded-full bg-white border-4 border-gray-300 shadow-lg hover:bg-gray-100 active:scale-95 transition-all focus:outline-none"
-            aria-label="Capture Photo"
-          >
-            <div className="w-12 h-12 rounded-full bg-red-500 group-hover:bg-red-600 transition-colors" />
-          </button>
-        </div>
-      )}
     </div>
   );
 };
