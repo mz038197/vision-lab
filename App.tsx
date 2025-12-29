@@ -36,6 +36,7 @@ function App() {
   const [faceClassification, setFaceClassification] = useState<string>('');
   const [handClassification, setHandClassification] = useState<string>('');
   const [bodyClassification, setBodyClassification] = useState<string>('');
+  const [imageClassification, setImageClassification] = useState<string>('');
 
   // Set ml5.js backend to WebGL
   useEffect(() => {
@@ -272,25 +273,40 @@ function App() {
                 {/* Image Classifier Section */}
                 {activeModes.classifier && (
                   <div className="w-full flex-shrink-0">
-                    <ImageClassifier videoRef={videoRef} isActive={isCameraActive && activeModes.classifier} />
-                  </div>
-                )}
-
-                {/* Combination Classifier - Show when multiple trainers are active */}
-                {(activeModes.face || activeModes.hand || activeModes.body) && (
-                  <div className="w-full flex-shrink-0">
-                    <CombinationClassifier
-                      faceResult={faceClassification}
-                      handResult={handClassification}
-                      bodyResult={bodyClassification}
-                      activeModes={{
-                        face: activeModes.face,
-                        hand: activeModes.hand,
-                        body: activeModes.body
-                      }}
+                    <ImageClassifier 
+                      videoRef={videoRef} 
+                      isActive={isCameraActive && activeModes.classifier}
+                      onClassificationResult={setImageClassification}
                     />
                   </div>
                 )}
+
+                {/* Combination Classifier - Show when 2 or more modules are active */}
+                {(() => {
+                  const activeCount = [
+                    activeModes.face,
+                    activeModes.hand,
+                    activeModes.body,
+                    activeModes.classifier
+                  ].filter(Boolean).length;
+                  
+                  return activeCount >= 2 ? (
+                    <div className="w-full flex-shrink-0">
+                      <CombinationClassifier
+                        faceResult={faceClassification}
+                        handResult={handClassification}
+                        bodyResult={bodyClassification}
+                        imageResult={imageClassification}
+                        activeModes={{
+                          face: activeModes.face,
+                          hand: activeModes.hand,
+                          body: activeModes.body,
+                          classifier: activeModes.classifier
+                        }}
+                      />
+                    </div>
+                  ) : null;
+                })()}
               </div>
             )}
           </div>

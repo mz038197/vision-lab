@@ -480,17 +480,32 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-gray-700 bg-gray-800 space-y-2 flex-none">
-        <button
-          onClick={trainModel}
-          disabled={labels.length < 2 || isTraining || isLoading || Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) === 0}
-          className={`w-full py-2.5 rounded-lg font-bold text-white transition-all text-sm ${
-            isTraining ? 'bg-gray-600 cursor-wait' : 
-            labels.length < 2 ? 'bg-gray-700 opacity-50 cursor-not-allowed' :
-            'bg-green-600 hover:bg-green-500'
-          }`}
-        >
-          {isTraining ? 'Training...' : 'Train Model'}
-        </button>
+        {/* Train Model Button with Info */}
+        <div className="space-y-1">
+          <button
+            onClick={trainModel}
+            disabled={
+              isTraining || 
+              isLoading || 
+              labels.length < 2 || 
+              Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) < 2
+            }
+            className={`w-full py-2.5 rounded-lg font-bold text-white transition-all text-sm ${
+              isTraining ? 'bg-gray-600 cursor-wait' : 
+              (labels.length < 2 || Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) < 2) 
+                ? 'bg-gray-700 opacity-50 cursor-not-allowed' 
+                : 'bg-green-600 hover:bg-green-500'
+            }`}
+          >
+            {isTraining ? 'Training...' : 'Train Model'}
+          </button>
+          {labels.length < 2 && (
+            <p className="text-xs text-amber-400 text-center">⚠️ Add at least 2 classes to train</p>
+          )}
+          {labels.length >= 2 && Object.values(dataCounts).reduce((a: number, b: number) => a + b, 0) < 2 && (
+            <p className="text-xs text-amber-400 text-center">⚠️ Collect at least 2 data samples to train</p>
+          )}
+        </div>
         
         <div className="flex gap-2">
           {isTrained && (

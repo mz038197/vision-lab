@@ -62,8 +62,8 @@ export function getNormalizedBodyVector(body: BodyPosePrediction): number[] {
 
   // 過濾低信心的點
   const validKeypoints = keypoints.slice(0, NUM_POINTS).map(kp => ({
-    x: kp.confidence > 0.3 ? kp.x : 0,
-    y: kp.confidence > 0.3 ? kp.y : 0,
+    x: kp.confidence > 0 ? kp.x : 0,
+    y: kp.confidence > 0 ? kp.y : 0,
     confidence: kp.confidence
   }));
 

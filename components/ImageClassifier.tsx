@@ -5,11 +5,12 @@ import { ImageClassifierResult } from '../types';
 interface ImageClassifierProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   isActive: boolean;
+  onClassificationResult?: (result: string) => void;
 }
 
 type PrebuiltModel = 'MobileNet' | 'Darknet' | 'Darknet-tiny' | 'DoodleNet';
 
-const ImageClassifier: React.FC<ImageClassifierProps> = ({ videoRef, isActive }) => {
+const ImageClassifier: React.FC<ImageClassifierProps> = ({ videoRef, isActive, onClassificationResult }) => {
   const [modelType, setModelType] = useState<'prebuilt' | 'custom'>('prebuilt');
   const [prebuiltModel, setPrebuiltModel] = useState<PrebuiltModel>('MobileNet');
   const [customModelUrl, setCustomModelUrl] = useState('');
@@ -146,6 +147,11 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({ videoRef, isActive })
             // Take top 3 results
             const topResults = classificationResults.slice(0, 3);
             setResults(topResults);
+            
+            // Notify parent component with the top result
+            if (topResults.length > 0 && onClassificationResult) {
+              onClassificationResult(topResults[0].label);
+            }
           }
 
           // Schedule next classification
