@@ -62,7 +62,7 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
       // Ensure we have a trained network and body data
       if (isTrained && network && currentData.length > 0) {
         const input = getNormalizedBodyVector(currentData[0]);
-        if (input.length === 34) {
+        if (input && input.length === 34) {
           try {
             // NOTE: We wait for the callback BEFORE scheduling the next classification.
             // This prevents "stacking" inference calls which crashes the browser.
@@ -121,7 +121,7 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
     if (!network || bodyPoseDataRef.current.length === 0) return;
 
     const inputs = getNormalizedBodyVector(bodyPoseDataRef.current[0]);
-    if (inputs.length === 34) {
+    if (inputs && inputs.length === 34) {
       const target = { label };
       network.addData(inputs, target);
       

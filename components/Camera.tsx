@@ -32,6 +32,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   const handPoseRef = useRef<any>(null);
   const bodyPoseRef = useRef<any>(null);
   const loadingLockRef = useRef(false);
+  const modelsLoadedRef = useRef({ face: false, hand: false, body: false });
   
   // Ref to track detection state for each model
   const isDetectingRef = useRef({
@@ -75,6 +76,11 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   useEffect(() => {
     bodyPoseModelRef.current = bodyPoseModel;
   }, [bodyPoseModel]);
+
+  // Sync modelsLoaded state to ref for use in detection loop
+  useEffect(() => {
+    modelsLoadedRef.current = modelsLoaded;
+  }, [modelsLoaded]);
 
   // Start/Stop Camera Stream
   useEffect(() => {
@@ -160,6 +166,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
           faceMeshRef.current = await window.ml5.faceMesh(faceOptions);
         }
         setModelsLoaded(prev => ({ ...prev, face: true }));
+        modelsLoadedRef.current.face = true;
 
         if (!handPoseRef.current) {
           const handOptions = {
@@ -169,12 +176,14 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
           handPoseRef.current = await window.ml5.handPose(handOptions);
         }
         setModelsLoaded(prev => ({ ...prev, hand: true }));
+        modelsLoadedRef.current.hand = true;
 
         // Initialize bodyPose with default MoveNet model
         if (!bodyPoseRef.current) {
           bodyPoseRef.current = await window.ml5.bodyPose('MoveNet');
         }
         setModelsLoaded(prev => ({ ...prev, body: true }));
+        modelsLoadedRef.current.body = true;
       } catch (e) {
         console.error("Failed to initialize models:", e);
         setError("Failed to load AI models.");
@@ -199,15 +208,18 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         }
         
         isDetectingRef.current.body = false;
+        latestBodyPredictionsRef.current = []; // Clear old predictions
         
         // Load new model
         setModelsLoaded(prev => ({ ...prev, body: false }));
+        modelsLoadedRef.current.body = false;
         console.log(`Switching to ${bodyPoseModel} model...`);
         bodyPoseRef.current = await window.ml5.bodyPose(bodyPoseModel as 'MoveNet' | 'BlazePose');
         console.log(`${bodyPoseModel} model loaded successfully`);
         setModelsLoaded(prev => ({ ...prev, body: true }));
+        modelsLoadedRef.current.body = true;
         
-        // Trigger detection restart
+        // Trigger detection restart immediately
         setModelVersion(prev => prev + 1);
         
       } catch (e) {
@@ -422,7 +434,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
       const hasActiveMode = activeModes.face || activeModes.hand || activeModes.body;
       if (!hasActiveMode || !isActive || !stream) return;
 
-      // 2. Debounce start: Wait 300ms before starting new detection.
+      // 2. Debounce start: Wait 100ms before starting new detection.
       // This prevents rapid switching from crashing the browser and gives DOM time to settle.
       detectionStartTimeout = setTimeout(() => {
         const video = videoRef.current;
@@ -443,8 +455,8 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
                 video.height = video.videoHeight;
             }
 
-            // Start face detection if active
-            if (activeModes.face && faceMeshRef.current && !isDetectingRef.current.face) {
+            // Start face detection if active and model is loaded
+            if (activeModes.face && faceMeshRef.current && modelsLoadedRef.current.face && !isDetectingRef.current.face) {
               isDetectingRef.current.face = true;
               try {
                 faceMeshRef.current.detectStart(video, (results: any[]) => {
@@ -456,14 +468,15 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
                        onFaceResultsRef.current(faceResults);
                    }
                 });
+                console.log('Face detection started');
               } catch (err) {
                 console.error("Error starting face detection:", err);
                 isDetectingRef.current.face = false;
               }
             }
 
-            // Start hand detection if active
-            if (activeModes.hand && handPoseRef.current && !isDetectingRef.current.hand) {
+            // Start hand detection if active and model is loaded
+            if (activeModes.hand && handPoseRef.current && modelsLoadedRef.current.hand && !isDetectingRef.current.hand) {
               isDetectingRef.current.hand = true;
               try {
                 handPoseRef.current.detectStart(video, (results: any[]) => {
@@ -478,14 +491,15 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
                        onHandResultsRef.current(handResults);
                    }
                 });
+                console.log('Hand detection started');
               } catch (err) {
                 console.error("Error starting hand detection:", err);
                 isDetectingRef.current.hand = false;
               }
             }
 
-            // Start body detection if active
-            if (activeModes.body && bodyPoseRef.current && !isDetectingRef.current.body) {
+            // Start body detection if active and model is loaded
+            if (activeModes.body && bodyPoseRef.current && modelsLoadedRef.current.body && !isDetectingRef.current.body) {
               isDetectingRef.current.body = true;
               try {
                 bodyPoseRef.current.detectStart(video, (results: any[]) => {
@@ -500,6 +514,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
                        onBodyResultsRef.current(bodyResults);
                    }
                 });
+                console.log('Body detection started');
               } catch (err) {
                 console.error("Error starting body detection:", err);
                 isDetectingRef.current.body = false;
@@ -507,7 +522,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
             }
           }
         }, 200); // Poll every 200ms
-      }, 300); // 300ms debounce delay
+      }, 100); // 100ms debounce delay
     };
 
     if (isActive && stream) {
@@ -520,7 +535,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
       stopDetection();
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isActive, activeModes.face, activeModes.hand, activeModes.body, stream, renderLoop, modelVersion]); // React to individual mode changes
+  }, [isActive, activeModes.face, activeModes.hand, activeModes.body, stream, renderLoop, modelVersion, modelsLoaded.face, modelsLoaded.hand, modelsLoaded.body]); // React to individual mode changes and model loading
 
   const captureImage = useCallback(() => {
     if (videoRef.current) {

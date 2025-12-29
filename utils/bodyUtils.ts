@@ -52,97 +52,99 @@ export function getNormalizedBodyVector(body: BodyPosePrediction): number[] {
   const keypoints = body?.keypoints;
   const NUM_POINTS = 17;
   const VECTOR_SIZE = NUM_POINTS * 2;
+  const CONF_TH = 0;
 
-  // ----------------------------
-  // 0. 安全檢查
-  // ----------------------------
   if (!keypoints || keypoints.length < NUM_POINTS) {
-    return new Array(VECTOR_SIZE).fill(0);
+    return null;
   }
 
-  // 過濾低信心的點
-  const validKeypoints = keypoints.slice(0, NUM_POINTS).map(kp => ({
-    x: kp.confidence > 0 ? kp.x : 0,
-    y: kp.confidence > 0 ? kp.y : 0,
-    confidence: kp.confidence
+  // ----------------------------
+  // 1. confidence 過濾（單點補 0）
+  // ----------------------------
+  const pts = keypoints.slice(0, NUM_POINTS).map(kp => ({
+    x: kp.confidence > CONF_TH ? kp.x : 0,
+    y: kp.confidence > CONF_TH ? kp.y : 0,
+    c: kp.confidence
   }));
 
   // ----------------------------
-  // 1. Translation：以髖部中點為中心
+  // 2. Translation：以髖部中心
   // ----------------------------
-  const leftHip = validKeypoints[11];
-  const rightHip = validKeypoints[12];
+  const lh = pts[11];
+  const rh = pts[12];
 
-  // 確保髖部關鍵點有效
-  if (leftHip.confidence < 0.3 || rightHip.confidence < 0.3) {
-    return new Array(VECTOR_SIZE).fill(0);
+  // 若髖部雙雙無效 → 這筆資料沒意義
+  if (lh.c <= CONF_TH && rh.c <= CONF_TH) {
+    return null;
   }
 
-  const hipCenterX = (leftHip.x + rightHip.x) / 2;
-  const hipCenterY = (leftHip.y + rightHip.y) / 2;
+  const cx = (lh.x + rh.x) / 2;
+  const cy = (lh.y + rh.y) / 2;
 
-  if (!isFinite(hipCenterX) || !isFinite(hipCenterY)) {
-    return new Array(VECTOR_SIZE).fill(0);
-  }
-
-  const translated = validKeypoints.map(kp => ({
-    x: safeNumber(kp.x - hipCenterX),
-    y: safeNumber(kp.y - hipCenterY),
-    confidence: kp.confidence
+  const translated = pts.map(p => ({
+    x: p.x - cx,
+    y: p.y - cy,
+    c: p.c
   }));
 
   // ----------------------------
-  // 2. Scale：使用肩寬標準化
+  // 3. Scale：肩寬（若肩壞 → fallback）
   // ----------------------------
-  const leftShoulder = translated[5];
-  const rightShoulder = translated[6];
+  const ls = translated[5];
+  const rs = translated[6];
 
-  // 確保肩膀關鍵點有效
-  if (validKeypoints[5].confidence < 0.3 || validKeypoints[6].confidence < 0.3) {
-    return new Array(VECTOR_SIZE).fill(0);
+  let scale = Math.hypot(rs.x - ls.x, rs.y - ls.y);
+
+  // 肩膀壞掉 → 用身體高度當尺度（保命）
+  if (!isFinite(scale) || scale < 1e-3) {
+    const yVals = translated.map(p => Math.abs(p.y));
+    scale = Math.max(...yVals);
   }
 
-  const shoulderWidth = Math.hypot(
-    rightShoulder.x - leftShoulder.x,
-    rightShoulder.y - leftShoulder.y
-  );
-
-  if (!isFinite(shoulderWidth) || shoulderWidth < 1e-6) {
-    return new Array(VECTOR_SIZE).fill(0);
+  if (!isFinite(scale) || scale < 1e-3) {
+    return null;
   }
 
   const scaled = translated.map(p => ({
-    x: p.x / shoulderWidth,
-    y: p.y / shoulderWidth,
-    confidence: p.confidence
+    x: p.x / scale,
+    y: p.y / scale,
+    c: p.c
   }));
 
   // ----------------------------
-  // 3. Rotation：肩線對齊到水平
+  // 4. Rotation：肩線對齊水平（可解釋）
   // ----------------------------
-  const shoulderDx = scaled[6].x - scaled[5].x;
-  const shoulderDy = scaled[6].y - scaled[5].y;
-  const angle = Math.atan2(shoulderDy, shoulderDx);
+  let angle = 0;
+
+  if (ls.c > CONF_TH && rs.c > CONF_TH) {
+    angle = Math.atan2(rs.y - ls.y, rs.x - ls.x);
+  }
 
   const cosA = Math.cos(-angle);
   const sinA = Math.sin(-angle);
 
   const rotated = scaled.map(p => ({
-    x: safeNumber(p.x * cosA - p.y * sinA),
-    y: safeNumber(p.x * sinA + p.y * cosA),
-    confidence: p.confidence
+    x: p.x * cosA - p.y * sinA,
+    y: p.x * sinA + p.y * cosA,
+    c: p.c
   }));
 
   // ----------------------------
-  // 4. Flatten
+  // 5. Flatten（保證不是全 0）
   // ----------------------------
-  const vector: number[] = [];
+  const vector = [];
+  let energy = 0;
+
   for (const p of rotated) {
-    vector.push(safeNumber(p.x), safeNumber(p.y));
+    vector.push(p.x, p.y);
+    energy += Math.abs(p.x) + Math.abs(p.y);
   }
 
-  return vector.length === VECTOR_SIZE
-    ? vector
-    : new Array(VECTOR_SIZE).fill(0);
+  // 全部太接近 0 → 當作壞資料
+  if (energy < 1e-4) {
+    return null;
+  }
+
+  return vector.length === VECTOR_SIZE ? vector : null;
 }
 
