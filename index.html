@@ -29,21 +29,26 @@
             const currentBackend = tf.getBackend();
             console.log(`📊 Current backend: ${currentBackend}`);
             
-            // If not WebGL, switch to it
+            // Always ensure we're on WebGL and it's ready
             if (currentBackend !== 'webgl') {
               console.log('🔄 Switching to WebGL backend...');
               await tf.setBackend('webgl');
-              await tf.ready();
-              console.log('✅ TensorFlow.js switched to WebGL backend');
-            } else {
-              console.log('✅ TensorFlow.js already using WebGL backend');
             }
+            
+            // Ensure backend is fully ready
+            await tf.ready();
+            console.log('✅ TensorFlow.js WebGL backend ready');
             
             // Configure environment to prefer WebGL
             if (tf.env && typeof tf.env === 'function') {
               tf.env().set('WEBGL_VERSION', 2);
               tf.env().set('WEBGL_CPU_FORWARD', false);
+              console.log('✅ WebGL environment configured');
             }
+            
+            // Verify final backend
+            const finalBackend = tf.getBackend();
+            console.log(`🎯 Final backend: ${finalBackend}`);
           } catch (error) {
             console.warn('⚠️ Failed to configure TensorFlow backend:', error);
           }

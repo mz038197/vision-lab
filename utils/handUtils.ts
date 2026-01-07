@@ -45,7 +45,8 @@ function safeNumber(v: number): number {
 export function getNormalizedHandVector(hand: HandPosePrediction): number[] {
   const keypoints = hand?.keypoints;
   const NUM_POINTS = 21;
-  const VECTOR_SIZE = NUM_POINTS * 2;
+  // 移除手腕的 x,y (總是 0,0)，所以是 20 個點 * 2 = 40 維
+  const VECTOR_SIZE = (NUM_POINTS - 1) * 2;
 
   // ----------------------------
   // 0. 安全檢查
@@ -100,11 +101,11 @@ export function getNormalizedHandVector(hand: HandPosePrediction): number[] {
   }));
 
   // ----------------------------
-  // 4. Flatten
+  // 4. Flatten - 跳過手腕 (index 0)，因為它總是 (0, 0)
   // ----------------------------
   const vector: number[] = [];
-  for (const p of rotated) {
-    vector.push(safeNumber(p.x), safeNumber(p.y));
+  for (let i = 1; i < rotated.length; i++) { // 從 index 1 開始，跳過手腕
+    vector.push(safeNumber(rotated[i].x), safeNumber(rotated[i].y));
   }
 
   return vector.length === VECTOR_SIZE

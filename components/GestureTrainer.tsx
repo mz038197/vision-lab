@@ -41,7 +41,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
         const nn = window.ml5.neuralNetwork({
           task: 'classification',
           debug: false,
-          inputs: 42, // 21 keypoints * 2 (x, y)
+          inputs: 40, // 20 keypoints * 2 (x, y) - 移除手腕坐標 (總是 0,0)
         });
         setNetwork(nn);
       }
@@ -62,7 +62,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
       // Ensure we have a trained network and hand data
       if (isTrained && network && currentData.length > 0) {
         const input = getNormalizedHandVector(currentData[0]);
-        if (input.length === 42) {
+        if (input.length === 40) { // 更新為 40 維
           try {
             // NOTE: We wait for the callback BEFORE scheduling the next classification.
             // This prevents "stacking" inference calls which crashes the browser.
@@ -121,7 +121,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
     if (!network || handPoseDataRef.current.length === 0) return;
 
     const inputs = getNormalizedHandVector(handPoseDataRef.current[0]);
-    if (inputs.length === 42) {
+    if (inputs.length === 40) { // 更新為 40 維
       const target = { label };
       network.addData(inputs, target);
       
@@ -205,16 +205,16 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // ml5 neuralNetwork expects: model.json, model_meta.json, model.weights.bin
+    // ml5 neuralNetwork expects: *.json (model), *meta*.json (metadata), *.bin (weights)
     const fileArray: File[] = Array.from(files);
     
-    // Check if we have the required files
-    const jsonFile = fileArray.find(f => f.name.endsWith('model.json') && !f.name.includes('meta'));
-    const metaFile = fileArray.find(f => f.name.includes('model_meta.json'));
-    const weightsFile = fileArray.find(f => f.name.endsWith('.weights.bin'));
+    // 更寬鬆的檔案匹配：只要類型對就好
+    const jsonFile = fileArray.find(f => f.name.endsWith('.json') && !f.name.toLowerCase().includes('meta'));
+    const metaFile = fileArray.find(f => f.name.endsWith('.json') && f.name.toLowerCase().includes('meta'));
+    const weightsFile = fileArray.find(f => f.name.endsWith('.bin'));
 
     if (!jsonFile || !metaFile || !weightsFile) {
-      alert("Please select all 3 model files: model.json, model_meta.json, and model.weights.bin");
+      alert("Please select all 3 model files:\n- Model JSON (*.json, no 'meta')\n- Metadata JSON (*meta*.json)\n- Weights binary (*.bin)");
       return;
     }
 
@@ -267,7 +267,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
     }
 
     // Create CSV content
-    const headers = ['label', ...Array.from({ length: 42 }, (_, i) => `feature_${i + 1}`)];
+    const headers = ['label', ...Array.from({ length: 40 }, (_, i) => `feature_${i + 1}`)];
     const csvRows = [headers.join(',')];
 
     trainingDataRef.current.forEach(({ inputs, label }) => {
@@ -320,7 +320,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
           const label = values[0].trim();
           const inputs = values.slice(1).map(v => parseFloat(v));
 
-          if (label && inputs.length === 42 && inputs.every(v => !isNaN(v))) {
+          if (label && inputs.length === 40 && inputs.every(v => !isNaN(v))) { // 更新為 40 維
             trainingDataRef.current.push({ inputs, label });
             newLabels.add(label);
             newDataCounts[label] = (newDataCounts[label] || 0) + 1;

@@ -205,16 +205,16 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // ml5 neuralNetwork expects: model.json, model_meta.json, model.weights.bin
+    // ml5 neuralNetwork expects: *.json (model), *meta*.json (metadata), *.bin (weights)
     const fileArray: File[] = Array.from(files);
     
-    // Check if we have the required files
-    const jsonFile = fileArray.find(f => f.name.endsWith('model.json') && !f.name.includes('meta'));
-    const metaFile = fileArray.find(f => f.name.includes('model_meta.json'));
-    const weightsFile = fileArray.find(f => f.name.endsWith('.weights.bin'));
+    // 更寬鬆的檔案匹配：只要類型對就好
+    const jsonFile = fileArray.find(f => f.name.endsWith('.json') && !f.name.toLowerCase().includes('meta'));
+    const metaFile = fileArray.find(f => f.name.endsWith('.json') && f.name.toLowerCase().includes('meta'));
+    const weightsFile = fileArray.find(f => f.name.endsWith('.bin'));
 
     if (!jsonFile || !metaFile || !weightsFile) {
-      alert("Please select all 3 model files: model.json, model_meta.json, and model.weights.bin");
+      alert("Please select all 3 model files:\n- Model JSON (*.json, no 'meta')\n- Metadata JSON (*meta*.json)\n- Weights binary (*.bin)");
       return;
     }
 

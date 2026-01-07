@@ -32,7 +32,6 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   const faceMeshRef = useRef<any>(null);
   const handPoseRef = useRef<any>(null);
   const bodyPoseRef = useRef<any>(null);
-  const loadingLockRef = useRef(false);
   const modelsLoadedRef = useRef({ face: false, hand: false, body: false });
   
   // Ref to track detection state for each model
@@ -226,18 +225,10 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
     };
   }, [isActive]); // Removed 'stream' from deps to avoid cycle
 
-  // Initialize ML5 Models
+  // 1. 環境初始化 - 只執行一次
   useEffect(() => {
-    const initModels = async () => {
-      // Skip if already loading or loaded
-      if (loadingLockRef.current) {
-        // If models are already loaded in refs, sync state
-        if (faceMeshRef.current && handPoseRef.current && bodyPoseRef.current) {
-          setModelsLoaded({ face: true, hand: true, body: true });
-        }
-        return;
-      }
-      
+    const initEnvironment = async () => {
+      // 等待 ml5 加載
       let attempts = 0;
       while (!window.ml5 && attempts < 20) {
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -249,83 +240,93 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         return;
       }
       
-      loadingLockRef.current = true;
+      // 確認 TensorFlow.js backend 就緒（index.html 已經設置為 WebGL）
+      if (window.tf && window.tf.ready) {
+        await window.tf.ready();
+        console.log('✅ Environment ready for model loading');
+      }
+    };
+    
+    initEnvironment();
+  }, []); // 空依賴，只執行一次
+
+  // 2. 模型按需加載 - 監聽 activeModes 變化
+  useEffect(() => {
+    const loadModels = async () => {
+      // 如果 ml5 還沒準備好，跳過
+      if (!window.ml5) return;
 
       try {
-        if (!faceMeshRef.current) {
+        // 只在啟用 Face 模式時加載 FaceMesh
+        if (activeModes.face && !faceMeshRef.current) {
+          console.log('📦 Loading Face Mesh model...');
+          setModelsLoaded(prev => ({ ...prev, face: false }));
           const faceOptions = {
             maxFaces: 1,
             refineLandmarks: true,
             flipped: false
           };
           faceMeshRef.current = await window.ml5.faceMesh(faceOptions);
-          console.log('Face Mesh model loaded successfully');
+          console.log('✅ Face Mesh model loaded successfully');
+          setModelsLoaded(prev => ({ ...prev, face: true }));
+          modelsLoadedRef.current.face = true;
         }
-        setModelsLoaded(prev => ({ ...prev, face: true }));
-        modelsLoadedRef.current.face = true;
 
-        if (!handPoseRef.current) {
+        // 只在啟用 Hand 模式時加載 HandPose
+        if (activeModes.hand && !handPoseRef.current) {
+          console.log('📦 Loading Hand Pose model...');
+          setModelsLoaded(prev => ({ ...prev, hand: false }));
           const handOptions = {
             maxHands: 2,
             flipped: false
           };
           handPoseRef.current = await window.ml5.handPose(handOptions);
+          console.log('✅ Hand Pose model loaded successfully');
+          setModelsLoaded(prev => ({ ...prev, hand: true }));
+          modelsLoadedRef.current.hand = true;
         }
-        setModelsLoaded(prev => ({ ...prev, hand: true }));
-        modelsLoadedRef.current.hand = true;
 
-        // Initialize bodyPose with default MoveNet model
-        if (!bodyPoseRef.current) {
-          bodyPoseRef.current = await window.ml5.bodyPose('MoveNet');
+        // 只在啟用 Body 模式時加載 BodyPose
+        if (activeModes.body) {
+          // 如果模型不存在或需要切換模型，則加載
+          const needsLoad = !bodyPoseRef.current;
+          const needsSwitch = bodyPoseRef.current && bodyPoseModelRef.current !== bodyPoseModel;
+          
+          if (needsLoad || needsSwitch) {
+            if (needsSwitch) {
+              console.log(`🔄 Switching from ${bodyPoseModelRef.current} to ${bodyPoseModel}...`);
+              // 停止當前檢測
+              if (bodyPoseRef.current?.detectStop) {
+                bodyPoseRef.current.detectStop();
+              }
+              isDetectingRef.current.body = false;
+              latestBodyPredictionsRef.current = [];
+            } else {
+              console.log('📦 Loading Body Pose model...');
+            }
+            
+            setModelsLoaded(prev => ({ ...prev, body: false }));
+            modelsLoadedRef.current.body = false;
+            bodyPoseRef.current = await window.ml5.bodyPose(bodyPoseModel as 'MoveNet' | 'BlazePose');
+            bodyPoseModelRef.current = bodyPoseModel;
+            console.log(`✅ ${bodyPoseModel} model loaded successfully`);
+            setModelsLoaded(prev => ({ ...prev, body: true }));
+            modelsLoadedRef.current.body = true;
+            
+            // 觸發檢測重啟
+            setModelVersion(prev => prev + 1);
+          }
         }
-        setModelsLoaded(prev => ({ ...prev, body: true }));
-        modelsLoadedRef.current.body = true;
       } catch (e) {
-        console.error("Failed to initialize models:", e);
+        console.error("Failed to load models:", e);
         setError("Failed to load AI models.");
       }
     };
 
-    initModels();
-  }, []);
+    loadModels();
+  }, [activeModes.face, activeModes.hand, activeModes.body, bodyPoseModel]); // 監聽模式變化
 
-  // Handle BodyPose Model Switching
-  useEffect(() => {
-    const switchBodyPoseModel = async () => {
-      if (!window.ml5) return;
-      
-      // Only switch if body mode is active
-      if (!activeModes.body && !activeModesRef.current.body) return;
-      
-      try {
-        // Stop current detection
-        if (bodyPoseRef.current?.detectStop) {
-          bodyPoseRef.current.detectStop();
-        }
-        
-        isDetectingRef.current.body = false;
-        latestBodyPredictionsRef.current = []; // Clear old predictions
-        
-        // Load new model
-        setModelsLoaded(prev => ({ ...prev, body: false }));
-        modelsLoadedRef.current.body = false;
-        console.log(`Switching to ${bodyPoseModel} model...`);
-        bodyPoseRef.current = await window.ml5.bodyPose(bodyPoseModel as 'MoveNet' | 'BlazePose');
-        console.log(`${bodyPoseModel} model loaded successfully`);
-        setModelsLoaded(prev => ({ ...prev, body: true }));
-        modelsLoadedRef.current.body = true;
-        
-        // Trigger detection restart immediately
-        setModelVersion(prev => prev + 1);
-        
-      } catch (e) {
-        console.error("Failed to switch bodyPose model:", e);
-        setError(`Failed to load ${bodyPoseModel} model.`);
-      }
-    };
-
-    switchBodyPoseModel();
-  }, [bodyPoseModel]);
+  // BodyPose 模型切換已整合到按需加載邏輯中
 
   // Stable Render Loop (does not depend on props)
   const renderLoop = useCallback(() => {
@@ -722,9 +723,21 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         style={{ display: isActive ? 'block' : 'none' }}
       />
 
-      {isActive && (activeModes.face || activeModes.hand || activeModes.body) && (!modelsLoaded.face || !modelsLoaded.hand || !modelsLoaded.body) && (
+      {isActive && (
+        (activeModes.face && !modelsLoaded.face) ||
+        (activeModes.hand && !modelsLoaded.hand) ||
+        (activeModes.body && !modelsLoaded.body)
+      ) && (
         <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur px-3 py-1 rounded-full text-xs text-yellow-300 border border-yellow-500/30 animate-pulse">
-          Loading Models...
+          Loading {
+            [
+              activeModes.face && !modelsLoaded.face && 'Face',
+              activeModes.hand && !modelsLoaded.hand && 'Hand',
+              activeModes.body && !modelsLoaded.body && 'Body'
+            ].filter(Boolean).join(', ')
+          } Model{
+            [activeModes.face && !modelsLoaded.face, activeModes.hand && !modelsLoaded.hand, activeModes.body && !modelsLoaded.body].filter(Boolean).length > 1 ? 's' : ''
+          }...
         </div>
       )}
     </div>
