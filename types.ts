@@ -112,5 +112,27 @@ declare global {
       neuralNetwork: (options?: NeuralNetworkOptions) => ML5NeuralNetwork;
       setBackend: (backend: 'webgl' | 'cpu' | 'webgpu') => Promise<void>;
     };
+    tf?: {
+      tidy: <T>(fn: () => T) => T;
+      nextFrame: () => Promise<void>;
+      disposeVariables?: () => void;
+      setBackend: (backend: 'webgl' | 'cpu' | 'webgpu' | 'wasm') => Promise<boolean>;
+      ready: () => Promise<void>;
+      getBackend: () => string;
+      env?: () => {
+        set: (key: string, value: any) => void;
+        get: (key: string) => any;
+      };
+      memory: () => {
+        numTensors: number;
+        numBytes: number;
+        numDataBuffers: number;
+      };
+      engine: () => {
+        startScope: () => void;
+        endScope: () => void;
+        backend?: any;
+      };
+    };
   }
 }

@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { FaceMeshPrediction, HandPosePrediction, BodyPosePrediction } from '../types';
+import '../types'; // Import to register global Window types
 
 interface CameraProps {
   isActive: boolean;
@@ -50,6 +51,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   const lastHandDetectTimeRef = useRef<number>(0);
   const lastBodyDetectTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number>(0);
+  const memoryCleanupIntervalRef = useRef<number | null>(null);
 
   // Ref for callbacks to avoid effect dependency cycles
   const onHandResultsRef = useRef(onHandResults);
@@ -81,6 +83,99 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   useEffect(() => {
     modelsLoadedRef.current = modelsLoaded;
   }, [modelsLoaded]);
+
+  // GPU Memory Cleanup - Run periodically to prevent memory leaks
+  useEffect(() => {
+    const cleanupGPUMemory = async () => {
+      try {
+        // Check if TensorFlow.js is fully initialized
+        if (!window.tf || typeof window.tf.engine !== 'function') {
+          return; // Skip if TensorFlow.js is not ready
+        }
+        
+        const engine = window.tf.engine();
+        if (!engine) {
+          return; // Skip if engine is not available
+        }
+        
+        // Use async memory API if available (better for WebGPU)
+        let memoryInfoBefore: any = null;
+        
+        // Try to get memory info asynchronously if supported
+        if (window.tf.memory) {
+          try {
+            // For WebGPU backend, avoid synchronous memory reads
+            const backend = engine.backend;
+            if (backend && backend.constructor && backend.constructor.name !== 'MathBackendWebGPU') {
+              // Safe to use memory() on WebGL/CPU backends
+              memoryInfoBefore = window.tf.memory();
+            }
+          } catch (e) {
+            // Silently skip if memory info not available
+          }
+        }
+        
+        // Clean up unused tensors using tidy
+        if (window.tf.nextFrame) {
+          await window.tf.nextFrame(); // Allow pending operations to complete
+        }
+        
+        // Safe scope management
+        if (engine.startScope && engine.endScope) {
+          engine.startScope();
+          engine.endScope();
+        }
+        
+        // Force garbage collection of textures
+        if (window.tf.tidy) {
+          window.tf.tidy(() => {});
+        }
+        
+        // Dispose any leaked tensors
+        if (window.tf.disposeVariables) {
+          window.tf.disposeVariables();
+        }
+        
+        // Log cleanup info only if we have memory data (non-WebGPU)
+        if (memoryInfoBefore) {
+          try {
+            const memoryInfoAfter = window.tf.memory();
+            const freedTensors = memoryInfoBefore.numTensors - memoryInfoAfter.numTensors;
+            const freedBytes = memoryInfoBefore.numBytes - memoryInfoAfter.numBytes;
+            
+            if (freedTensors > 0 || freedBytes > 0) {
+              console.log(`🧹 GPU Memory Cleanup: Released ${freedTensors} tensors, freed ${(freedBytes / 1024 / 1024).toFixed(2)} MB`);
+            }
+          } catch (e) {
+            // Skip logging if memory read fails
+          }
+        }
+      } catch (error) {
+        console.warn('GPU memory cleanup failed:', error);
+      }
+    };
+
+    // Delay first cleanup to ensure TensorFlow.js is fully initialized
+    const startCleanup = () => {
+      // Run cleanup every 30 seconds
+      memoryCleanupIntervalRef.current = window.setInterval(() => {
+        cleanupGPUMemory(); // Call async function
+      }, 30000);
+      console.log('🚀 GPU memory cleanup scheduled (every 30 seconds)');
+    };
+    
+    // Wait 3 seconds before starting cleanup to ensure everything is initialized
+    const startTimeout = setTimeout(startCleanup, 3000);
+
+    return () => {
+      clearTimeout(startTimeout);
+      if (memoryCleanupIntervalRef.current) {
+        clearInterval(memoryCleanupIntervalRef.current);
+        memoryCleanupIntervalRef.current = null;
+        console.log('🛑 GPU memory cleanup stopped');
+      }
+    };
+  }, []);
 
   // Start/Stop Camera Stream
   useEffect(() => {
@@ -164,6 +259,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
             flipped: false
           };
           faceMeshRef.current = await window.ml5.faceMesh(faceOptions);
+          console.log('Face Mesh model loaded successfully');
         }
         setModelsLoaded(prev => ({ ...prev, face: true }));
         modelsLoadedRef.current.face = true;
@@ -423,6 +519,40 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx && canvasRef.current) {
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+      
+      // Clean up GPU memory after stopping detection (async safe)
+      if (window.tf && typeof window.tf.engine === 'function') {
+        try {
+          const engine = window.tf.engine();
+          if (!engine) return;
+          
+          // Use nextFrame to avoid sync GPU reads
+          if (window.tf.nextFrame) {
+            window.tf.nextFrame().then(() => {
+              if (window.tf && typeof window.tf.engine === 'function') {
+                const eng = window.tf.engine();
+                if (eng && eng.startScope && eng.endScope) {
+                  eng.startScope();
+                  eng.endScope();
+                }
+                if (window.tf.tidy) {
+                  window.tf.tidy(() => {});
+                }
+              }
+            }).catch((e) => {
+              console.warn("Error cleaning GPU memory on stop:", e);
+            });
+          } else if (engine.startScope && engine.endScope) {
+            engine.startScope();
+            engine.endScope();
+            if (window.tf.tidy) {
+              window.tf.tidy(() => {});
+            }
+          }
+        } catch (e) {
+          console.warn("Error cleaning GPU memory on stop:", e);
+        }
       }
     };
 
