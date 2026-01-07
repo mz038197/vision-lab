@@ -6,56 +6,18 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%234F46E5'/%3E%3Ccircle cx='35' cy='40' r='8' fill='white'/%3E%3Ccircle cx='65' cy='40' r='8' fill='white'/%3E%3Cpath d='M30 65 Q50 80 70 65' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
     <title>FaceMesh & Gemini Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load ml5.js (includes TensorFlow.js) -->
+    <!-- Load ml5.js v1 (includes TensorFlow.js internally) -->
     <script src="https://unpkg.com/ml5@1/dist/ml5.min.js"></script>
     <script>
-      // Configure TensorFlow.js backend immediately after ml5 loads
-      (function() {
-        let configAttempts = 0;
-        const maxAttempts = 50;
-        
-        const configureTensorFlow = async () => {
-          // Wait for both ml5 and tf to be available
-          if (!window.ml5 || !window.tf) {
-            if (configAttempts < maxAttempts) {
-              configAttempts++;
-              setTimeout(configureTensorFlow, 50);
-            }
-            return;
-          }
-          
-          try {
-            // Get current backend
-            const currentBackend = tf.getBackend();
-            console.log(`📊 Current backend: ${currentBackend}`);
-            
-            // Always ensure we're on WebGL and it's ready
-            if (currentBackend !== 'webgl') {
-              console.log('🔄 Switching to WebGL backend...');
-              await tf.setBackend('webgl');
-            }
-            
-            // Ensure backend is fully ready
-            await tf.ready();
-            console.log('✅ TensorFlow.js WebGL backend ready');
-            
-            // Configure environment to prefer WebGL
-            if (tf.env && typeof tf.env === 'function') {
-              tf.env().set('WEBGL_VERSION', 2);
-              tf.env().set('WEBGL_CPU_FORWARD', false);
-              console.log('✅ WebGL environment configured');
-            }
-            
-            // Verify final backend
-            const finalBackend = tf.getBackend();
-            console.log(`🎯 Final backend: ${finalBackend}`);
-          } catch (error) {
-            console.warn('⚠️ Failed to configure TensorFlow backend:', error);
-          }
-        };
-        
-        // Start configuration
-        configureTensorFlow();
+      // ml5 v1 doesn't expose window.tf, so we need to access it via ml5's internal tf
+      // Wait for ml5 to load and expose tf
+      (function checkTf() {
+        if (window.ml5 && window.ml5.tf) {
+          window.tf = window.ml5.tf;
+          console.log('✅ TensorFlow.js exposed from ml5:', window.tf.version.tfjs);
+        } else if (!window.tf) {
+          setTimeout(checkTf, 100);
+        }
       })();
     </script>
     <style>

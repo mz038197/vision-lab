@@ -104,6 +104,7 @@ export interface ML5NeuralNetwork {
 
 declare global {
   interface Window {
+    __TF_BACKEND_CONFIGURED__?: boolean;
     ml5: {
       faceMesh: (options?: any) => Promise<ML5Model>;
       handPose: (options?: any) => Promise<ML5Model>;
@@ -132,6 +133,10 @@ declare global {
         startScope: () => void;
         endScope: () => void;
         backend?: any;
+        backendNames: () => string[];
+      };
+      version?: {
+        tfjs: string;
       };
     };
   }

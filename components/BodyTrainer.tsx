@@ -42,6 +42,7 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
           task: 'classification',
           debug: false,
           inputs: 34, // 17 keypoints * 2 (x, y)
+          outputs: ['label']  // 明確指定輸出結構
         });
         setNetwork(nn);
       }
@@ -225,6 +226,8 @@ const BodyTrainer: React.FC<BodyTrainerProps> = ({ bodyPoseDataRef, onClassifica
       const nn = window.ml5.neuralNetwork({
         task: 'classification',
         debug: false,
+        inputs: 34,  // 17 keypoints * 2 (x, y)
+        outputs: ['label']  // 明確指定輸出結構
       });
 
       // Create object URLs for the files

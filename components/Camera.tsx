@@ -92,7 +92,13 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
           return; // Skip if TensorFlow.js is not ready
         }
         
-        const engine = window.tf.engine();
+        let engine;
+        try {
+          engine = window.tf.engine();
+        } catch (e) {
+          return; // Skip if engine() call fails
+        }
+        
         if (!engine) {
           return; // Skip if engine is not available
         }
@@ -103,36 +109,36 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         // Try to get memory info asynchronously if supported
         if (window.tf.memory) {
           try {
-            // For WebGPU backend, avoid synchronous memory reads
-            const backend = engine.backend;
-            if (backend && backend.constructor && backend.constructor.name !== 'MathBackendWebGPU') {
-              // Safe to use memory() on WebGL/CPU backends
-              memoryInfoBefore = window.tf.memory();
+            // Safely check backend before accessing
+            if (engine.backend && engine.backend.constructor) {
+              const backendName = engine.backend.constructor.name;
+              // For WebGPU backend, avoid synchronous memory reads
+              if (backendName !== 'MathBackendWebGPU') {
+                // Safe to use memory() on WebGL/CPU backends
+                memoryInfoBefore = window.tf.memory();
+              }
             }
           } catch (e) {
             // Silently skip if memory info not available
           }
         }
         
-        // Clean up unused tensors using tidy
-        if (window.tf.nextFrame) {
-          await window.tf.nextFrame(); // Allow pending operations to complete
-        }
-        
-        // Safe scope management
-        if (engine.startScope && engine.endScope) {
-          engine.startScope();
-          engine.endScope();
-        }
-        
-        // Force garbage collection of textures
+        // Clean up unused tensors using tidy (safe during training/prediction)
         if (window.tf.tidy) {
-          window.tf.tidy(() => {});
+          try {
+            window.tf.tidy(() => {});
+          } catch (e) {
+            // Skip if tidy fails
+          }
         }
         
-        // Dispose any leaked tensors
-        if (window.tf.disposeVariables) {
-          window.tf.disposeVariables();
+        // Allow pending GPU operations to complete
+        if (window.tf.nextFrame) {
+          try {
+            await window.tf.nextFrame();
+          } catch (e) {
+            // Skip if nextFrame fails
+          }
         }
         
         // Log cleanup info only if we have memory data (non-WebGPU)
@@ -150,7 +156,7 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
           }
         }
       } catch (error) {
-        console.warn('GPU memory cleanup failed:', error);
+        // Silently handle cleanup errors to avoid breaking the app
       }
     };
 
@@ -228,9 +234,9 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
   // 1. 環境初始化 - 只執行一次
   useEffect(() => {
     const initEnvironment = async () => {
-      // 等待 ml5 加載
+      // 等待 ml5 和 tf 加載
       let attempts = 0;
-      while (!window.ml5 && attempts < 20) {
+      while ((!window.ml5 || !window.tf) && attempts < 20) {
         await new Promise(resolve => setTimeout(resolve, 200));
         attempts++;
       }
@@ -239,11 +245,19 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         setError("ML5 library failed to load.");
         return;
       }
+
+      if (!window.tf) {
+        setError("TensorFlow.js library failed to load.");
+        return;
+      }
       
-      // 確認 TensorFlow.js backend 就緒（index.html 已經設置為 WebGL）
-      if (window.tf && window.tf.ready) {
+      // 配置 TensorFlow.js backend 為 WebGL（使用全域標記確保只執行一次）
+      try {
+        await window.tf.setBackend('webgl');
+        console.log('✅ Backend set to WebGL');
         await window.tf.ready();
-        console.log('✅ Environment ready for model loading');
+      } catch (error) {
+        console.error('❌ Failed to configure TensorFlow backend:', error);
       }
     };
     

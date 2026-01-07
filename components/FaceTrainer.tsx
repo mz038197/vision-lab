@@ -47,6 +47,7 @@ const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef, onClassifica
           task: 'classification',
           debug: false,
           inputs: inputSize,
+          outputs: ['label']  // 明確指定輸出結構
         });
         setNetwork(nn);
         
@@ -252,6 +253,7 @@ const FaceTrainer: React.FC<FaceTrainerProps> = ({ faceMeshDataRef, onClassifica
         task: 'classification',
         debug: false,
         inputs: inputSize,
+        outputs: ['label']  // 明確指定輸出結構
       });
 
       // Create object URLs for the files

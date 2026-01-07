@@ -38,24 +38,6 @@ function App() {
   const [bodyClassification, setBodyClassification] = useState<string>('');
   const [imageClassification, setImageClassification] = useState<string>('');
 
-  // Verify backend is set correctly (already configured in index.html)
-  useEffect(() => {
-    const verifyBackend = () => {
-      if (window.tf && window.tf.getBackend) {
-        const backend = window.tf.getBackend();
-        console.log(`✅ Current TensorFlow.js backend: ${backend}`);
-        if (backend !== 'webgl') {
-          console.warn(`⚠️ Warning: Backend is ${backend}, expected webgl`);
-        }
-      }
-      if (window.ml5) {
-        console.log('✅ ml5.js loaded and ready');
-      }
-    };
-    
-    // Wait a bit for libraries to initialize
-    setTimeout(verifyBackend, 500);
-  }, []);
 
   const toggleCamera = () => {
     setIsCameraActive(!isCameraActive);

@@ -42,6 +42,7 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
           task: 'classification',
           debug: false,
           inputs: 40, // 20 keypoints * 2 (x, y) - 移除手腕坐標 (總是 0,0)
+          outputs: ['label']  // 明確指定輸出結構
         });
         setNetwork(nn);
       }
@@ -225,6 +226,8 @@ const GestureTrainer: React.FC<GestureTrainerProps> = ({ handPoseDataRef, onClas
       const nn = window.ml5.neuralNetwork({
         task: 'classification',
         debug: false,
+        inputs: 40,  // 20 keypoints * 2 (x, y)
+        outputs: ['label']  // 明確指定輸出結構
       });
 
       // Create object URLs for the files
