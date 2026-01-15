@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { FaceMeshPrediction, HandPosePrediction, BodyPosePrediction } from '../types';
+import { FaceMeshPrediction, HandPosePrediction, BodyPosePrediction, ObjectDetectionResult } from '../types';
 import '../types'; // Import to register global Window types
 
 interface CameraProps {
@@ -10,16 +10,18 @@ interface CameraProps {
     hand: boolean;
     body: boolean;
     classifier: boolean;
+    object: boolean;
   };
   bodyPoseModel?: 'MoveNet' | 'BlazePose';
   onCapture: (imageData: string) => void;
   onHandResults?: (results: HandPosePrediction[]) => void;
   onFaceResults?: (results: FaceMeshPrediction[]) => void;
   onBodyResults?: (results: BodyPosePrediction[]) => void;
+  objectDetectionsRef?: React.MutableRefObject<ObjectDetectionResult[]>;
   videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
-const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 'MoveNet', onCapture, onHandResults, onFaceResults, onBodyResults, videoRef: externalVideoRef }) => {
+const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 'MoveNet', onCapture, onHandResults, onFaceResults, onBodyResults, objectDetectionsRef, videoRef: externalVideoRef }) => {
   const internalVideoRef = useRef<HTMLVideoElement>(null);
   const videoRef = externalVideoRef || internalVideoRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -499,6 +501,43 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
         }
     }
 
+    // Draw object detections if active
+    if (currentModes.object && objectDetectionsRef?.current?.length) {
+        const detections = objectDetectionsRef.current;
+        ctx.lineWidth = 2;
+        ctx.font = 'bold 14px sans-serif';
+        
+        detections.forEach((det) => {
+          const { x, y, width, height } = det.bbox;
+          const labelText = `${det.label} ${(det.confidence * 100).toFixed(0)}%`;
+          
+          // 繪製邊框
+          ctx.strokeStyle = 'rgba(99, 102, 241, 0.9)';
+          ctx.strokeRect(x, y, width, height);
+          
+          // 繪製標籤背景和文字（需要反轉以抵消 canvas 的 scale-x-[-1]）
+          ctx.save();
+          
+          // 反轉 x 軸以抵消 canvas 的鏡像
+          ctx.scale(-1, 1);
+          
+          // 計算反轉後的座標
+          const flippedX = -x;
+          const textWidth = ctx.measureText(labelText).width;
+          const textY = y - 8 < 0 ? y + 12 : y - 6;
+          
+          // 繪製背景
+          ctx.fillStyle = 'rgba(99, 102, 241, 0.9)';
+          ctx.fillRect(flippedX - textWidth - 4, textY - 12, textWidth + 6, 16);
+          
+          // 繪製文字
+          ctx.fillStyle = '#fff';
+          ctx.fillText(labelText, flippedX - textWidth - 1, textY - 2);
+          
+          ctx.restore();
+        });
+    }
+
     animationFrameRef.current = requestAnimationFrame(renderLoop);
   }, []); // Empty dependencies = stable function
 
@@ -530,6 +569,9 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
       latestBodyPredictionsRef.current = [];
       lastHandDetectTimeRef.current = 0;
       lastBodyDetectTimeRef.current = 0;
+      if (objectDetectionsRef) {
+        objectDetectionsRef.current = [];
+      }
       
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx && canvasRef.current) {

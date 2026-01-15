@@ -21,6 +21,7 @@ interface CombinationClassifierProps {
     hand: boolean;
     body: boolean;
     classifier: boolean;
+    object: boolean;
   };
 }
 

@@ -7,7 +7,8 @@ import FaceTrainer from './components/FaceTrainer';
 import BodyTrainer from './components/BodyTrainer';
 import ImageClassifier from './components/ImageClassifier';
 import CombinationClassifier from './components/CombinationClassifier';
-import { HandPosePrediction, FaceMeshPrediction, BodyPosePrediction } from './types';
+import ObjectDetector from './components/ObjectDetector';
+import { HandPosePrediction, FaceMeshPrediction, BodyPosePrediction, ObjectDetectionResult } from './types';
 
 function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -17,11 +18,13 @@ function App() {
     hand: boolean;
     body: boolean;
     classifier: boolean;
+    object: boolean;
   }>({
     face: false,
     hand: false,
     body: false,
     classifier: false,
+    object: false,
   });
   const [bodyPoseModel, setBodyPoseModel] = useState<'MoveNet' | 'BlazePose'>('MoveNet');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -30,6 +33,7 @@ function App() {
   const handPoseResultsRef = useRef<HandPosePrediction[]>([]);
   const faceMeshResultsRef = useRef<FaceMeshPrediction[]>([]);
   const bodyPoseResultsRef = useRef<BodyPosePrediction[]>([]);
+  const objectDetectionsRef = useRef<ObjectDetectionResult[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Store latest classification results for combination classifier
@@ -48,14 +52,16 @@ function App() {
         hand: false,
         body: false,
         classifier: false,
+        object: false,
       });
       handPoseResultsRef.current = [];
       faceMeshResultsRef.current = [];
       bodyPoseResultsRef.current = [];
+      objectDetectionsRef.current = [];
     }
   };
 
-  const toggleMode = (mode: 'face' | 'hand' | 'body' | 'classifier') => {
+  const toggleMode = (mode: 'face' | 'hand' | 'body' | 'classifier' | 'object') => {
     setActiveModes(prev => ({
       ...prev,
       [mode]: !prev[mode]
@@ -66,6 +72,7 @@ function App() {
       if (mode === 'hand') handPoseResultsRef.current = [];
       if (mode === 'face') faceMeshResultsRef.current = [];
       if (mode === 'body') bodyPoseResultsRef.current = [];
+      if (mode === 'object') objectDetectionsRef.current = [];
     }
   };
 
@@ -84,6 +91,10 @@ function App() {
 
   const handleBodyResults = useCallback((results: BodyPosePrediction[]) => {
       bodyPoseResultsRef.current = results;
+  }, []);
+
+  const handleObjectResults = useCallback((results: ObjectDetectionResult[]) => {
+      objectDetectionsRef.current = results;
   }, []);
 
   return (
@@ -137,12 +148,13 @@ function App() {
 
              {/* Detection Mode Selectors */}
              <div className="flex flex-wrap items-center gap-2">
-               {[
-                 { key: 'face' as const, label: 'Face Mesh', icon: '👤' },
-                 { key: 'hand' as const, label: 'Hand Pose', icon: '✋' },
-                 { key: 'body' as const, label: 'Body Pose', icon: '🏃' },
-                 { key: 'classifier' as const, label: 'Classifier', icon: '🔍' }
-               ].map(({ key, label, icon }) => (
+              {[
+                { key: 'face' as const, label: 'Face Mesh', icon: '👤' },
+                { key: 'hand' as const, label: 'Hand Pose', icon: '✋' },
+                { key: 'body' as const, label: 'Body Pose', icon: '🏃' },
+                { key: 'classifier' as const, label: 'Classifier', icon: '🔍' },
+                { key: 'object' as const, label: 'Object Detect', icon: '📦' }
+              ].map(({ key, label, icon }) => (
                   <button
                     key={key}
                     onClick={() => toggleMode(key)}
@@ -194,10 +206,10 @@ function App() {
           </div>
 
           {/* Main Layout: Camera + Trainer Side by Side - Fill Remaining Height */}
-          <div className={`flex-1 flex flex-col ${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-row' : ''} gap-4 items-start overflow-hidden`}>
+          <div className={`flex-1 flex flex-col ${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier || activeModes.object) ? 'lg:flex-row' : ''} gap-4 items-start overflow-hidden`}>
             
             {/* Camera Viewport - Fixed, No Scroll */}
-            <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0 flex flex-col items-center h-full`}>
+            <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier || activeModes.object) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0 flex flex-col items-center h-full`}>
               <div className="w-full aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
                 <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
                 <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
@@ -212,19 +224,20 @@ function App() {
                   onHandResults={handleHandResults}
                   onFaceResults={handleFaceResults}
                   onBodyResults={handleBodyResults}
+                  objectDetectionsRef={objectDetectionsRef}
                   videoRef={videoRef}
                 />
               </div>
               
-              {!(isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier)) && (
+              {!(isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier || activeModes.object)) && (
                 <div className="text-center text-gray-500 text-sm mt-4">
-                  <p>1. Start the camera. 2. Select one or more detection modes (Face, Hand, Body, Classifier). 3. Capture a photo to edit with AI.</p>
+                  <p>1. Start the camera. 2. Select one or more detection modes (Face, Hand, Body, Classifier, Object). 3. Capture a photo to edit with AI.</p>
                 </div>
               )}
             </div>
 
             {/* Trainer Panels - Independent Scroll Area */}
-            {isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier) && (
+            {isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier || activeModes.object) && (
               <div className="w-full lg:w-[40%] lg:min-w-[420px] h-full overflow-y-auto space-y-4 pr-2">
                 {/* Gesture Trainer Section */}
                 {activeModes.hand && (
@@ -263,6 +276,17 @@ function App() {
                       videoRef={videoRef} 
                       isActive={isCameraActive && activeModes.classifier}
                       onClassificationResult={setImageClassification}
+                    />
+                  </div>
+                )}
+
+                {/* Object Detector Section */}
+                {activeModes.object && (
+                  <div className="w-full flex-shrink-0">
+                    <ObjectDetector
+                      videoRef={videoRef}
+                      isActive={isCameraActive && activeModes.object}
+                      onDetections={handleObjectResults}
                     />
                   </div>
                 )}

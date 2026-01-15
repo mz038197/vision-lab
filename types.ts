@@ -55,6 +55,18 @@ export interface ImageClassifierResult {
   confidence: number;
 }
 
+export interface ObjectDetectionResult {
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  classId: number;
+  label: string;
+  confidence: number;
+}
+
 export interface ML5ImageClassifier {
   classify: (
     media: HTMLVideoElement | HTMLImageElement,
