@@ -7,6 +7,7 @@ interface CombinationRule {
   handLabel: string;
   bodyLabel: string;
   imageLabel: string;
+  objectLabel: string;
   resultLabel: string;
   enabled: boolean;
 }
@@ -16,6 +17,7 @@ interface CombinationClassifierProps {
   handResult: string;
   bodyResult: string;
   imageResult: string;
+  objectResult: string;
   activeModes: {
     face: boolean;
     hand: boolean;
@@ -30,6 +32,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
   handResult,
   bodyResult,
   imageResult,
+  objectResult,
   activeModes
 }) => {
   const STORAGE_KEY = 'visionlab-combination-rules';
@@ -53,6 +56,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
     handLabel: '',
     bodyLabel: '',
     imageLabel: '',
+    objectLabel: '',
     resultLabel: ''
   });
   const [matchedRule, setMatchedRule] = useState<CombinationRule | null>(null);
@@ -104,12 +108,20 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
           }
         }
 
+        // Check object condition (if object mode is active and rule has object condition)
+        if (rule.objectLabel && activeModes.object) {
+          if (objectResult.toLowerCase() !== rule.objectLabel.toLowerCase()) {
+            matches = false;
+          }
+        }
+
         // Check if at least one condition is being checked
         const hasCondition = 
           (rule.faceLabel && activeModes.face) ||
           (rule.handLabel && activeModes.hand) ||
           (rule.bodyLabel && activeModes.body) ||
-          (rule.imageLabel && activeModes.classifier);
+          (rule.imageLabel && activeModes.classifier) ||
+          (rule.objectLabel && activeModes.object);
 
         if (matches && hasCondition) {
           setMatchedRule(rule);
@@ -120,7 +132,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
     };
 
     checkRules();
-  }, [faceResult, handResult, bodyResult, imageResult, rules, activeModes]);
+  }, [faceResult, handResult, bodyResult, imageResult, objectResult, rules, activeModes]);
 
   const addRule = () => {
     if (!newRule.resultLabel) {
@@ -128,7 +140,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
       return;
     }
 
-    if (!newRule.faceLabel && !newRule.handLabel && !newRule.bodyLabel && !newRule.imageLabel) {
+    if (!newRule.faceLabel && !newRule.handLabel && !newRule.bodyLabel && !newRule.imageLabel && !newRule.objectLabel) {
       alert('至少需要設定一個條件');
       return;
     }
@@ -139,12 +151,13 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
       handLabel: newRule.handLabel,
       bodyLabel: newRule.bodyLabel,
       imageLabel: newRule.imageLabel,
+      objectLabel: newRule.objectLabel,
       resultLabel: newRule.resultLabel,
       enabled: true
     };
 
     setRules([...rules, rule]);
-    setNewRule({ faceLabel: '', handLabel: '', bodyLabel: '', imageLabel: '', resultLabel: '' });
+    setNewRule({ faceLabel: '', handLabel: '', bodyLabel: '', imageLabel: '', objectLabel: '', resultLabel: '' });
     setShowAddForm(false);
   };
 
@@ -178,7 +191,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
       return;
     }
 
-    if (!editingRule.faceLabel && !editingRule.handLabel && !editingRule.bodyLabel && !editingRule.imageLabel) {
+    if (!editingRule.faceLabel && !editingRule.handLabel && !editingRule.bodyLabel && !editingRule.imageLabel && !editingRule.objectLabel) {
       alert('至少需要設定一個條件');
       return;
     }
@@ -262,6 +275,11 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
                     🔍 {matchedRule.imageLabel}
                   </span>
                 )}
+                {matchedRule.objectLabel && (
+                  <span className="bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded">
+                    📦 {matchedRule.objectLabel}
+                  </span>
+                )}
               </div>
             </>
           ) : (
@@ -270,7 +288,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
         </div>
 
         {/* Current Detection Results */}
-        <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+        <div className="mt-3 grid grid-cols-5 gap-2 text-xs">
           <div className={`p-2 rounded ${activeModes.face ? 'bg-cyan-900/20 border border-cyan-700/50' : 'bg-gray-800/50 border border-gray-700'}`}>
             <div className="text-gray-400 mb-1">Face</div>
             <div className={`font-medium truncate ${activeModes.face ? 'text-cyan-300' : 'text-gray-600'}`}>
@@ -293,6 +311,12 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
             <div className="text-gray-400 mb-1">Image</div>
             <div className={`font-medium truncate ${activeModes.classifier ? 'text-purple-300' : 'text-gray-600'}`}>
               {activeModes.classifier ? (imageResult || '-') : '未啟用'}
+            </div>
+          </div>
+          <div className={`p-2 rounded ${activeModes.object ? 'bg-indigo-900/20 border border-indigo-700/50' : 'bg-gray-800/50 border border-gray-700'}`}>
+            <div className="text-gray-400 mb-1">Object</div>
+            <div className={`font-medium truncate ${activeModes.object ? 'text-indigo-300' : 'text-gray-600'}`}>
+              {activeModes.object ? (objectResult || '-') : '未啟用'}
             </div>
           </div>
         </div>
@@ -377,6 +401,17 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
                 onChange={(e) => setEditingRule({ ...editingRule, imageLabel: e.target.value })}
                 placeholder="例如: Cat"
                 className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">📦 Object 條件 (可選)</label>
+              <input
+                type="text"
+                value={editingRule.objectLabel}
+                onChange={(e) => setEditingRule({ ...editingRule, objectLabel: e.target.value })}
+                placeholder="例如: person"
+                className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -468,6 +503,17 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
             </div>
 
             <div>
+              <label className="text-xs text-gray-400 block mb-1">📦 Object 條件 (可選)</label>
+              <input
+                type="text"
+                value={newRule.objectLabel}
+                onChange={(e) => setNewRule({ ...newRule, objectLabel: e.target.value })}
+                placeholder="例如: person"
+                className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
               <label className="text-xs text-gray-400 block mb-1">🎯 最終類別 (必填)</label>
               <input
                 type="text"
@@ -487,7 +533,7 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
               </button>
               <button
                 onClick={() => {
-                  setNewRule({ faceLabel: '', handLabel: '', bodyLabel: '', imageLabel: '', resultLabel: '' });
+                  setNewRule({ faceLabel: '', handLabel: '', bodyLabel: '', imageLabel: '', objectLabel: '', resultLabel: '' });
                   setShowAddForm(false);
                 }}
                 className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors text-sm"
@@ -588,6 +634,11 @@ const CombinationClassifier: React.FC<CombinationClassifierProps> = ({
                     {rule.imageLabel && (
                       <span className="bg-purple-900/30 text-purple-300 px-2 py-1 rounded">
                         🔍 {rule.imageLabel}
+                      </span>
+                    )}
+                    {rule.objectLabel && (
+                      <span className="bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded">
+                        📦 {rule.objectLabel}
                       </span>
                     )}
                   </div>

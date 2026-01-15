@@ -41,6 +41,7 @@ function App() {
   const [handClassification, setHandClassification] = useState<string>('');
   const [bodyClassification, setBodyClassification] = useState<string>('');
   const [imageClassification, setImageClassification] = useState<string>('');
+  const [objectClassification, setObjectClassification] = useState<string>('');
 
 
   const toggleCamera = () => {
@@ -95,6 +96,14 @@ function App() {
 
   const handleObjectResults = useCallback((results: ObjectDetectionResult[]) => {
       objectDetectionsRef.current = results;
+      if (results && results.length > 0) {
+        const top = results.reduce((best, current) =>
+          current.confidence > best.confidence ? current : best
+        );
+        setObjectClassification(top.label);
+      } else {
+        setObjectClassification('');
+      }
   }, []);
 
   return (
@@ -297,7 +306,8 @@ function App() {
                     activeModes.face,
                     activeModes.hand,
                     activeModes.body,
-                    activeModes.classifier
+                    activeModes.classifier,
+                    activeModes.object
                   ].filter(Boolean).length;
                   
                   return activeCount >= 2 ? (
@@ -307,11 +317,13 @@ function App() {
                         handResult={handClassification}
                         bodyResult={bodyClassification}
                         imageResult={imageClassification}
+                        objectResult={objectClassification}
                         activeModes={{
                           face: activeModes.face,
                           hand: activeModes.hand,
                           body: activeModes.body,
-                          classifier: activeModes.classifier
+                          classifier: activeModes.classifier,
+                          object: activeModes.object
                         }}
                       />
                     </div>
