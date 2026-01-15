@@ -219,7 +219,7 @@ function App() {
             
             {/* Camera Viewport - Fixed, No Scroll */}
             <div className={`${isCameraActive && (activeModes.hand || activeModes.face || activeModes.body || activeModes.classifier || activeModes.object) ? 'lg:flex-1 lg:max-w-[60%]' : 'w-full max-w-4xl mx-auto'} shrink-0 flex flex-col items-center h-full`}>
-              <div className="w-full aspect-video bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
+              <div className="w-full h-full bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative group">
                 <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-indigo-500/50 rounded-tl-2xl z-20 pointer-events-none"></div>
                 <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-indigo-500/50 rounded-tr-2xl z-20 pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-indigo-500/50 rounded-bl-2xl z-20 pointer-events-none"></div>

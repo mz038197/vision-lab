@@ -769,13 +769,13 @@ const Camera: React.FC<CameraProps> = ({ isActive, activeModes, bodyPoseModel = 
             const video = e.target as HTMLVideoElement;
             video.play().catch(console.error);
         }}
-        className={`w-full h-full object-cover transform ${isActive ? 'scale-x-[-1]' : ''}`}
+        className={`w-full h-full object-contain transform ${isActive ? 'scale-x-[-1]' : ''}`}
         style={{ display: isActive ? 'block' : 'none' }}
       />
 
       <canvas
         ref={canvasRef}
-        className="absolute top-0 left-0 w-full h-full pointer-events-none transform scale-x-[-1]"
+        className="absolute top-0 left-0 w-full h-full pointer-events-none object-contain transform scale-x-[-1]"
         style={{ display: isActive ? 'block' : 'none' }}
       />
 
